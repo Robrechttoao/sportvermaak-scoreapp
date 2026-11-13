@@ -990,6 +990,55 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
     font-weight: 700 !important;
     line-height: 1.2 !important;
 }
+
+/* ========== SCOREBLOKKEN GROTER + KLEUR GEMIDDELDE (nov 2026) ==========
+   Alles hieronder is nieuw en overschrijft de regels erboven. Maten volgen de breedte van het scherm (vw),
+   zodat de blokken op elk scherm in beeld blijven. Aanpassen? Pas --cijfer (grootte van de cijfers) aan. */
+.scoring-row-container {
+    --cijfer: clamp(4.5rem, 8.4vw, 12rem);   /* cijfers van 1 en 2 tekens */
+    gap: 1vw !important;
+    padding: 20px 0.8vw !important;
+    flex-wrap: nowrap !important;
+}
+.score-cell {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 12px 4px !important;
+}
+/* Middenblok smaller */
+.score-cell.center-info {
+    flex: 1.1 1 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 14px 8px !important;
+}
+#currentPlayerDisplay > div > div:first-child { font-size: clamp(3rem, 5vw, 6rem) !important; }
+#currentPlayerDisplay > div > div:nth-child(2) { margin-top: 8px !important; }
+#currentPlayerDisplay > div > div:nth-child(2) span {
+    font-size: clamp(1.6rem, 2.6vw, 3rem) !important;
+    padding: 0.2em 0.8em !important;
+    border-radius: 45px !important;
+}
+#currentPlayerDisplay > div > div:nth-child(3) {
+    font-size: clamp(0.95rem, 1.4vw, 1.5rem) !important;
+    margin-top: 12px !important;
+}
+/* Cijfers in de blokken: nog te spelen, deze beurt, totaal */
+#p1NeededCell .cell-value, #p2NeededCell .cell-value,
+#p1CurrentCell .cell-value, #p2CurrentCell .cell-value,
+#p1TotalCell .cell-value, #p2TotalCell .cell-value {
+    font-size: var(--cijfer) !important;
+}
+/* Cijfers van 3 tekens iets kleiner, zodat ze in hun blok passen (zet de app via data-len) */
+#p1NeededCell .cell-value[data-len="3"], #p2NeededCell .cell-value[data-len="3"],
+#p1CurrentCell .cell-value[data-len="3"], #p2CurrentCell .cell-value[data-len="3"],
+#p1TotalCell .cell-value[data-len="3"], #p2TotalCell .cell-value[data-len="3"] {
+    font-size: calc(var(--cijfer) * 0.78) !important;
+}
+/* Gespeeld gemiddelde: rood onder je TSG, groen op of boven je TSG */
+#p1PlayedAvg.gem-onder, #p2PlayedAvg.gem-onder { background: rgba(176, 74, 66, 0.78) !important; }
+#p1PlayedAvg.gem-boven, #p2PlayedAvg.gem-boven { background: rgba(46, 140, 90, 0.78) !important; }
 </style>
 </head>
 <body id="bodyElement">
@@ -2135,6 +2184,22 @@ document.addEventListener('keyup', function(e) {
     }
 });
 
+
+// ---------- Kleur van het gespeelde gemiddelde: rood onder je TSG, groen op of boven je TSG ----------
+function kleurGemiddelde(el, p, extra) {
+    el.classList.remove('gem-onder', 'gem-boven');
+    const n = p.turns.length + (extra > 0 ? 1 : 0);
+    if (n === 0) {
+        return; // nog niets gespeeld: geen kleur
+    }
+    const tsg = parseFloat(String(p.fixedTSG).replace(',', '.'));
+    if (isNaN(tsg)) {
+        return; // geen TSG bekend: geen kleur
+    }
+    const gem = (p.score + extra) / n;
+    // Vergelijk zoals het op het scherm staat (2 decimalen)
+    el.classList.add(Math.round(gem * 100) >= Math.round(tsg * 100) ? 'gem-boven' : 'gem-onder');
+}
 function clearOldCache() { if (localStorage.getItem('app_version') !== APP_VERSION) { localStorage.setItem('app_version', APP_VERSION); } }
 function getAdminPassword() { return localStorage.getItem('biljartAdminPassword') || null; }
 function setAdminPassword(newPassword) { if (newPassword && newPassword.trim() !== '') { localStorage.setItem('biljartAdminPassword', newPassword.trim()); return true; } return false; }
@@ -2236,7 +2301,7 @@ function updateCurrentScoreDisplay() {
     const p1Played = document.getElementById('p1PlayedAvg');
     const p1Highest = document.getElementById('p1Highest');
     const p1Target = document.getElementById('p1TargetAvg');
-    if(p1Played) p1Played.textContent = fmtAvg(state.player1, liveInvoer(1));
+    if(p1Played) { p1Played.textContent = fmtAvg(state.player1, liveInvoer(1)); kleurGemiddelde(p1Played, state.player1, liveInvoer(1)); }
     if(p1Highest) p1Highest.textContent = state.player1.highestSeries || 0;
     if(p1Target) p1Target.textContent = fmtTarget(state.player1.fixedTSG);
     
@@ -2244,7 +2309,7 @@ function updateCurrentScoreDisplay() {
     const p2Played = document.getElementById('p2PlayedAvg');
     const p2Highest = document.getElementById('p2Highest');
     const p2Target = document.getElementById('p2TargetAvg');
-    if(p2Played) p2Played.textContent = fmtAvg(state.player2, liveInvoer(2));
+    if(p2Played) { p2Played.textContent = fmtAvg(state.player2, liveInvoer(2)); kleurGemiddelde(p2Played, state.player2, liveInvoer(2)); }
     if(p2Highest) p2Highest.textContent = state.player2.highestSeries || 0;
     if(p2Target) p2Target.textContent = fmtTarget(state.player2.fixedTSG);
 }
@@ -2818,6 +2883,11 @@ if(di){di.value=formatDateForInput(today);di.addEventListener('change',function(
 updateTabBadges();
 initPresenterControls();
 showPage(1);
+
+// Cijfers van 3 tekens krijgen een kleiner lettertype (zie css), zodat ze in hun blok passen
+function pasCijferLengte(el) { el.setAttribute('data-len', String(el.textContent.trim().length)); }
+const cijferWaarnemer = new MutationObserver(function(lijst) { lijst.forEach(function(m) { const el = m.target.nodeType === 3 ? m.target.parentElement : m.target; if (el && el.classList && el.classList.contains('cell-value')) pasCijferLengte(el); }); });
+document.querySelectorAll('.scoring-row-container .cell-value').forEach(function(el) { pasCijferLengte(el); cijferWaarnemer.observe(el, { childList: true, characterData: true, subtree: true }); });
 
 // Planner en wachtrij
 toonPlannerStatus();
