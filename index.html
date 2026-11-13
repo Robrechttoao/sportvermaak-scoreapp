@@ -2589,6 +2589,28 @@
                 </div>
             </div>
             
+            <div class="download-section" style="border-left-color: #3498db;">
+                <h3 style="color: #3498db;">Verbinding met de planner</h3>
+
+                <label for="plannerAdres" style="display: block; margin-bottom: 8px;">Adres van de planner:</label>
+                <input type="text" id="plannerAdres" class="date-input"
+                       placeholder="https://bjcdeengel8647.pythonanywhere.com"
+                       style="text-align: left; margin-bottom: 15px;">
+
+                <label for="plannerSleutel" style="display: block; margin-bottom: 8px;">Sleutel:</label>
+                <input type="password" id="plannerSleutel" class="date-input"
+                       placeholder="Plak hier de sleutel van de planner"
+                       style="text-align: left; margin-bottom: 15px;">
+
+                <button class="download-btn" onclick="bewaarVerbinding()">Bewaar</button>
+                <button class="download-btn" onclick="testVerbinding()" style="background: #3498db;">Test verbinding</button>
+
+                <p id="verbindingStatus" style="margin-top: 12px; color: #bdc3c7; font-size: 0.9em;"></p>
+                <p style="margin-top: 8px; color: #95a5a6; font-size: 0.8em;">
+                    Het adres en de sleutel worden alleen in de browser van deze pc bewaard. Ze staan nooit in de code.
+                </p>
+            </div>
+
             <div class="download-section">
                 <h3>📥 Download Resultaten</h3>
                 <div style="margin: 20px 0;">
@@ -2760,9 +2782,10 @@
 
             // ==================== CACHE MANAGEMENT ====================
             function clearOldCache() {
+                // Alleen de versie onthouden. Er wordt NIETS gewist, want hier staan ook
+                // het beheerderswachtwoord, de verbinding met de planner en uitslagen
+                // die nog niet verstuurd zijn.
                 if (localStorage.getItem('app_version') !== APP_VERSION) {
-                    console.log('Nieuwe versie - clearing oude cache...');
-                    localStorage.clear();
                     localStorage.setItem('app_version', APP_VERSION);
                 }
             }
@@ -2846,6 +2869,101 @@
                     alert("✅ Wachtwoord succesvol gewijzigd!");
                 } else {
                     alert("❌ Fout bij wijzigen wachtwoord");
+                }
+            }
+
+            // ==================== VERBINDING MET DE PLANNER ====================
+            function leesVerbinding() {
+                return {
+                    adres: (localStorage.getItem('plannerAdres') || '').replace(/\/+$/, ''),
+                    sleutel: localStorage.getItem('plannerSleutel') || ''
+                };
+            }
+
+            function toonVerbindingStatus(tekst, kleur) {
+                const el = document.getElementById('verbindingStatus');
+                if (el) {
+                    el.textContent = tekst;
+                    el.style.color = kleur || '#bdc3c7';
+                }
+            }
+
+            window.bewaarVerbinding = function() {
+                const adres = document.getElementById('plannerAdres').value.trim().replace(/\/+$/, '');
+                const sleutelVeld = document.getElementById('plannerSleutel');
+                const sleutel = sleutelVeld.value.trim();
+
+                if (!/^https:\/\/[^\s\/]+$/.test(adres)) {
+                    toonVerbindingStatus('Vul het adres in zoals https://bjcdeengel8647.pythonanywhere.com (zonder iets erachter).', '#e74c3c');
+                    return;
+                }
+                if (!sleutel && !leesVerbinding().sleutel) {
+                    toonVerbindingStatus('Vul ook de sleutel in.', '#e74c3c');
+                    return;
+                }
+                try {
+                    localStorage.setItem('plannerAdres', adres);
+                    if (sleutel) {
+                        localStorage.setItem('plannerSleutel', sleutel);
+                    }
+                } catch (e) {
+                    toonVerbindingStatus('Bewaren is mislukt: de browser weigert de opslag.', '#e74c3c');
+                    return;
+                }
+                sleutelVeld.value = '';
+                toonVerbindingStatus('Bewaard. Klik op "Test verbinding" om te controleren.', '#2ecc71');
+            }
+
+            window.testVerbinding = async function() {
+                const bewaard = leesVerbinding();
+                const adres = document.getElementById('plannerAdres').value.trim().replace(/\/+$/, '') || bewaard.adres;
+                const sleutel = document.getElementById('plannerSleutel').value.trim() || bewaard.sleutel;
+
+                if (!adres || !sleutel) {
+                    toonVerbindingStatus('Vul eerst het adres en de sleutel in.', '#e74c3c');
+                    return;
+                }
+
+                toonVerbindingStatus('Verbinding testen...', '#bdc3c7');
+                const afbreker = new AbortController();
+                const timer = setTimeout(() => afbreker.abort(), 8000);
+                try {
+                    const antwoord = await fetch(adres + '/api/ping', {
+                        headers: { 'X-API-Key': sleutel },
+                        cache: 'no-store',
+                        signal: afbreker.signal
+                    });
+                    if (antwoord.ok) {
+                        toonVerbindingStatus('Verbonden met de planner.', '#2ecc71');
+                    } else if (antwoord.status === 401) {
+                        toonVerbindingStatus('De planner is bereikbaar, maar de sleutel klopt niet.', '#e74c3c');
+                    } else {
+                        toonVerbindingStatus('De planner antwoordt met een fout (' + antwoord.status + ').', '#e74c3c');
+                    }
+                } catch (fout) {
+                    toonVerbindingStatus('Geen verbinding met de planner (internet of adres).', '#e74c3c');
+                } finally {
+                    clearTimeout(timer);
+                }
+            }
+
+            function vulVerbindingIn() {
+                const bewaard = leesVerbinding();
+                const adresVeld = document.getElementById('plannerAdres');
+                const sleutelVeld = document.getElementById('plannerSleutel');
+                if (adresVeld) {
+                    adresVeld.value = bewaard.adres;
+                }
+                if (sleutelVeld) {
+                    sleutelVeld.value = '';
+                    sleutelVeld.placeholder = bewaard.sleutel
+                        ? 'Sleutel is bewaard (leeg laten om te behouden)'
+                        : 'Plak hier de sleutel van de planner';
+                }
+                if (bewaard.adres && bewaard.sleutel) {
+                    toonVerbindingStatus('Verbinding is ingesteld.', '#bdc3c7');
+                } else {
+                    toonVerbindingStatus('', '#bdc3c7');
                 }
             }
 
@@ -3032,6 +3150,7 @@ window.showPage = function(pageNum) {
             const filterDate = document.getElementById('filterDate');
             if (filterDate) filterDate.value = formatDateForInput(new Date());
         }
+        vulVerbindingIn();
     } else if (actualPageNum === 8) {
         if (typeof loadStatsPage === 'function') {
             loadStatsPage();
