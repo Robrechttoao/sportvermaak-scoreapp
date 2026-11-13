@@ -996,6 +996,7 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
    zodat de blokken op elk scherm in beeld blijven. Aanpassen? Pas --cijfer (grootte van de cijfers) aan. */
 .scoring-row-container {
     --cijfer: clamp(4.5rem, 8.4vw, 12rem);   /* cijfers van 1 en 2 tekens */
+    --beurtkleur: #7ed6ff;                  /* kleur van het beurtnummer in het middenblok */
     gap: 1vw !important;
     padding: 20px 0.8vw !important;
     flex-wrap: nowrap !important;
@@ -1005,6 +1006,7 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
     min-width: 0 !important;
     max-width: none !important;
     padding: 12px 4px !important;
+    min-height: clamp(190px, 24.5vh, 340px) !important;   /* blokken iets hoger */
 }
 /* Middenblok smaller */
 .score-cell.center-info {
@@ -1013,14 +1015,14 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
     max-width: none !important;
     padding: 14px 8px !important;
 }
-#currentPlayerDisplay > div > div:first-child { font-size: clamp(3rem, 5vw, 6rem) !important; }
-#currentPlayerDisplay > div > div:nth-child(2) { margin-top: 8px !important; }
-#currentPlayerDisplay > div > div:nth-child(2) span {
-    font-size: clamp(1.6rem, 2.6vw, 3rem) !important;
-    padding: 0.2em 0.8em !important;
-    border-radius: 45px !important;
+/* Middenblok: enkel het nummer van de beurt (geen B en geen wit/geel-label meer), groot en gekleurd */
+#currentPlayerDisplay > div > div:first-child {
+    font-size: clamp(4rem, 8vw, 10rem) !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    color: var(--beurtkleur) !important;
 }
-#currentPlayerDisplay > div > div:nth-child(3) {
+#currentPlayerDisplay > div > div:nth-child(2) {
     font-size: clamp(0.95rem, 1.4vw, 1.5rem) !important;
     margin-top: 12px !important;
 }
@@ -1058,6 +1060,19 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 
 /* De knoppen + en - zijn weg (de presenter doet alles): de blokjes eronder krijgen wat ruimte ertussen */
 .score-controls { gap: 3vw !important; }
+
+/* ========== KOP VAN HET SCORESCHERM: te spelen punten uiterst links en rechts ==========
+   De namen blijven in het midden, rond de zwaarden. (display: contents laat de cijfers en namen als losse items meedoen.) */
+.header-match-info {
+    justify-content: space-between !important;
+    gap: 1.5vw !important;
+    padding: 0 0.5vw !important;
+}
+.header-player-side { display: contents !important; }
+#headerTarget1 { margin-right: auto !important; }
+#headerTarget2 { margin-left: auto !important; }
+#headerName1 { text-align: right !important; }
+#headerName2 { text-align: left !important; }
 </style>
 </head>
 <body id="bodyElement">
@@ -2672,10 +2687,7 @@ function updateScoringPage() {
     
     document.getElementById('currentPlayerDisplay').innerHTML = `
         <div style="text-align:center;">
-            <div style="font-size:4rem;font-weight:bold;color:white;line-height:1.2;">B ${cb}</div>
-            <div style="margin-top:15px;">
-                <span style="background:${cc === 'Wit' ? 'white' : '#f1c40f'};color:black;font-size:2rem;font-weight:bold;padding:8px 30px;border-radius:50px;display:inline-block;">${cc}</span>
-            </div>
+            <div style="font-weight:bold;line-height:1;">${cb}</div>
             ${ei}
         </div>`;
     
