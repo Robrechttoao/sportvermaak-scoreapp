@@ -1039,6 +1039,8 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 /* Gespeeld gemiddelde: rood onder je TSG, groen op of boven je TSG */
 #p1PlayedAvg.gem-onder, #p2PlayedAvg.gem-onder { background: rgba(176, 74, 66, 0.78) !important; }
 #p1PlayedAvg.gem-boven, #p2PlayedAvg.gem-boven { background: rgba(46, 140, 90, 0.78) !important; }
+/* Totaalscore van de speler die niet aan de beurt is: een beetje gedimd (niet tijdens/na het einde van de match) */
+#p1TotalCell.gedimd-totaal, #p2TotalCell.gedimd-totaal { opacity: 0.74 !important; }
 </style>
 </head>
 <body id="bodyElement">
@@ -1306,32 +1308,32 @@ const leftBtn = document.getElementById('headerLeftBtn');
 const rightBtn = document.getElementById('headerRightBtn');
 if (!leftBtn || !rightBtn) return;
 if (state.matchEnded) {
+leftBtn.style.display = '';
 leftBtn.innerHTML = '🏠 Hoofdmenu';
 leftBtn.onclick = () => showPage(1);
 leftBtn.disabled = false;
 leftBtn.style.background = 'linear-gradient(135deg, #2ecc71, #27ae60)';
 rightBtn.disabled = true;
-rightBtn.style.visibility = 'hidden';
+rightBtn.style.display = 'none';
 return;
 }
 const hasTurns = (state.player1.turns.length > 0 || state.player2.turns.length > 0);
 const currentName = state.currentPlayer === 1 ? state.currentMatch.p1 : state.currentMatch.p2;
-leftBtn.innerHTML = `Einde beurt ${currentName}`;
-leftBtn.onclick = () => addScore();
-leftBtn.disabled = false;
-leftBtn.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+// De knop "Einde beurt" is weg: einde beurt gaat met de toets Tab van de presenter
+leftBtn.style.display = 'none';
+leftBtn.onclick = null;
 if (!hasTurns) {
 rightBtn.innerHTML = '🏠 Hoofdmenu';
 rightBtn.onclick = () => showPage(1);
 rightBtn.disabled = false;
 rightBtn.style.background = '#3498db';
 rightBtn.style.opacity = '1';
-rightBtn.style.visibility = 'visible';
+rightBtn.style.display = '';
 } else {
 // Ongedaan maken gaat met een lange druk omlaag (toets B). Geen knop meer, de plaats blijft vrij.
 rightBtn.onclick = null;
 rightBtn.disabled = true;
-rightBtn.style.visibility = 'hidden';
+rightBtn.style.display = 'none';
 }
 }
 
@@ -2200,6 +2202,15 @@ function kleurGemiddelde(el, p, extra) {
     // Vergelijk zoals het op het scherm staat (2 decimalen)
     el.classList.add(Math.round(gem * 100) >= Math.round(tsg * 100) ? 'gem-boven' : 'gem-onder');
 }
+
+// ---------- Totaalscore van de andere speler een beetje dimmen ----------
+function dimTotalen() {
+    const a = document.getElementById('p1TotalCell');
+    const b = document.getElementById('p2TotalCell');
+    const bezig = !state.matchEnded;
+    if (a) a.classList.toggle('gedimd-totaal', bezig && state.currentPlayer !== 1);
+    if (b) b.classList.toggle('gedimd-totaal', bezig && state.currentPlayer !== 2);
+}
 function clearOldCache() { if (localStorage.getItem('app_version') !== APP_VERSION) { localStorage.setItem('app_version', APP_VERSION); } }
 function getAdminPassword() { return localStorage.getItem('biljartAdminPassword') || null; }
 function setAdminPassword(newPassword) { if (newPassword && newPassword.trim() !== '') { localStorage.setItem('biljartAdminPassword', newPassword.trim()); return true; } return false; }
@@ -2281,6 +2292,7 @@ function updateCurrentScoreDisplay() {
     // === 6. "NOG NODIG" CELLEN: dimmed + danger (rood bij ≤5) ===
     if (p1NeededCell) p1NeededCell.classList.toggle('dimmed', state.currentPlayer !== 1);
     if (p2NeededCell) p2NeededCell.classList.toggle('dimmed', state.currentPlayer !== 2);
+    dimTotalen();
     if (p1NeededCell) p1NeededCell.classList.toggle('danger', n1 <= 5 && n1 > 0);
     if (p2NeededCell) p2NeededCell.classList.toggle('danger', n2 <= 5 && n2 > 0);
 
