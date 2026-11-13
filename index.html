@@ -2644,8 +2644,8 @@ function updateScoringPage() {
     // Helper voor compacte beurt-weergave: "B1: 3"
     const renderTurns = (turns, playerName) => {
         if (!turns.length) return '<div style="text-align:center;color:#666;padding:20px;font-size:0.9em;">Nog geen beurten</div>';
-        return [...turns].reverse().map((t, i) => 
-            `<div class="turn-row ${t === 0 ? 'turn-nul' : (t === Math.max(...turns) ? 'turn-hoogste' : 'turn-score')}"><span>B${turns.length - i}: ${t}</span></div>`
+        return turns.map((t, i) => 
+            `<div class="turn-row ${t === 0 ? 'turn-nul' : (t === Math.max(...turns) ? 'turn-hoogste' : 'turn-score')}"><span>B${i + 1}: ${t}</span></div>`
         ).join('');
     };
 
