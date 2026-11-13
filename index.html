@@ -2403,6 +2403,7 @@
                 <input type="date" id="dateSelect" class="date-input">
                 <button class="next-btn" onclick="goToPage2()">Maak match of kies een match uit de lijst →</button>
             </div>
+        <!-- De planner-status staat op de matchenpagina -->
 	    <!-- In je bestaande homepagina, ergens waar knoppen staan -->
 	    <button onclick="showPage(8)" style="font-size:1.2rem; padding:14px 24px;">
     📊 Statistieken
@@ -2425,6 +2426,7 @@
                 </div>
             </div>
             
+            <p id="plannerStatusTekst" style="color: #bdc3c7; font-size: 0.9em; margin: 0 0 12px 0;"></p>
             <div id="matchList"></div>
         </div>
         
@@ -2516,11 +2518,14 @@
                     <button class="back-btn" onclick="showPage(4)">← Terug</button>
                 </div>
                 <h1 id="matchTitle"></h1>
-                <div style="width: 70px;"></div>
+                <div style="min-width: 70px; text-align: right;">
+                    <button class="back-btn" tabindex="-1" onclick="breekMatchAf()" style="background: #c0392b;">Afbreken</button>
+                </div>
             </div>
             
             <!-- MATCH ENDED ALERT -->
             <div id="matchEndedAlert" class="match-ended" style="display: none;"></div>
+            <p id="uitslagStatus" style="display: none; text-align: center; margin: 8px 10px; font-size: 0.95em;"></p>
             
             <!-- HUIDIGE BEURT IN HET MIDDEN MET WIT/GEEL SCORES -->
             <div class="current-turn-container">
@@ -2967,6 +2972,540 @@
                 }
             }
 
+            // ==================== PLANNER OPHALEN ====================
+            const LOKAAL_ID_VANAF = 1000000;
+
+            window.haalPlannerOp = async function() {
+                const verbinding = leesVerbinding();
+                if (!verbinding.adres || !verbinding.sleutel) {
+                    return { ok: false, reden: 'niet_ingesteld' };
+                }
+                // Nooit tijdens een lopende match: dan kan er niets verloren gaan
+                if (state.currentPage === 5 && !state.matchEnded) {
+                    return { ok: false, reden: 'match_bezig' };
+                }
+
+                const afbreker = new AbortController();
+                const timer = setTimeout(() => afbreker.abort(), 10000);
+                let data;
+                try {
+                    const antwoord = await fetch(verbinding.adres + '/api/alles', {
+                        headers: { 'X-API-Key': verbinding.sleutel },
+                        cache: 'no-store',
+                        signal: afbreker.signal
+                    });
+                    if (antwoord.status === 401) {
+                        return { ok: false, reden: 'sleutel' };
+                    }
+                    if (!antwoord.ok) {
+                        return { ok: false, reden: 'fout' };
+                    }
+                    data = await antwoord.json();
+                } catch (fout) {
+                    return { ok: false, reden: 'geen_verbinding' };
+                } finally {
+                    clearTimeout(timer);
+                }
+
+                if (!data || !Array.isArray(data.spelers) || !Array.isArray(data.speeldagen) || !Array.isArray(data.matchen)) {
+                    return { ok: false, reden: 'fout' };
+                }
+                // Tijdens het wachten kan er een match gestart zijn
+                if (state.currentPage === 5 && !state.matchEnded) {
+                    return { ok: false, reden: 'match_bezig' };
+                }
+
+                const planner = data.matchen;
+                const plannerIds = new Set(planner.map(m => m.id));
+                const lokaal = state.matches || [];
+                const nieuweLijst = [];
+
+                planner.forEach(pm => {
+                    const lm = lokaal.find(m => m.plannerId === pm.id);
+                    // Lokaal afgeronde match die de planner nog niet als gespeeld kent: bewaren
+                    if (lm && lm.completed && !pm.completed) {
+                        nieuweLijst.push(lm);
+                    } else {
+                        nieuweLijst.push(pm);
+                    }
+                });
+
+                lokaal.forEach(lm => {
+                    if (!plannerIds.has(lm.plannerId) && (lm.completed || lm.id >= LOKAAL_ID_VANAF)) {
+                        nieuweLijst.push(lm);
+                    }
+                });
+
+                state.players = data.spelers;
+                state.speeldagen = data.speeldagen;
+                state.matches = nieuweLijst;
+
+                if (state.currentMatch) {
+                    const gevonden = state.matches.find(m => m.id === state.currentMatch.id);
+                    if (gevonden) {
+                        state.currentMatch = gevonden;
+                    }
+                }
+
+                try {
+                    saveStateToStorage();
+                    localStorage.setItem('plannerLaatsteSync', data.ververst_op || new Date().toISOString());
+                } catch (fout) {
+                    return { ok: false, reden: 'opslaan' };
+                }
+
+                return {
+                    ok: true,
+                    spelers: state.players.length,
+                    speeldagen: state.speeldagen.length,
+                    matchen: state.matches.length
+                };
+            }
+
+            // ==================== PLANNER STATUS EN VERNIEUWEN ====================
+            let plannerBezig = false;
+
+            function formatSyncTijd(iso) {
+                if (!iso) {
+                    return '';
+                }
+                const d = new Date(iso);
+                if (isNaN(d.getTime())) {
+                    return '';
+                }
+                const uur = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+                if (d.toDateString() === new Date().toDateString()) {
+                    return uur;
+                }
+                return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + uur;
+            }
+
+            function toonPlannerStatus(tekst, kleur) {
+                const el = document.getElementById('plannerStatusTekst');
+                if (!el) {
+                    return;
+                }
+                if (tekst === undefined) {
+                    const verbinding = leesVerbinding();
+                    const laatste = formatSyncTijd(localStorage.getItem('plannerLaatsteSync'));
+                    if (!verbinding.adres || !verbinding.sleutel) {
+                        tekst = 'Planner niet ingesteld (Beheer Matchen > Verbinding)';
+                        kleur = '#f1c40f';
+                    } else if (laatste) {
+                        tekst = 'Planner laatst bijgewerkt: ' + laatste;
+                        kleur = '#bdc3c7';
+                    } else {
+                        tekst = 'Planner: nog niet opgehaald';
+                        kleur = '#bdc3c7';
+                    }
+                }
+                el.textContent = tekst;
+                el.style.color = kleur || '#bdc3c7';
+            }
+
+            window.vernieuwPlanner = async function() {
+                if (plannerBezig) {
+                    return;
+                }
+                plannerBezig = true;
+                toonPlannerStatus('Planner wordt opgehaald...', '#bdc3c7');
+                let r;
+                try {
+                    r = await haalPlannerOp();
+                } catch (fout) {
+                    r = { ok: false, reden: 'fout' };
+                } finally {
+                    plannerBezig = false;
+                }
+
+                const laatste = formatSyncTijd(localStorage.getItem('plannerLaatsteSync'));
+                const oud = laatste ? ' Je werkt met de gegevens van ' + laatste + '.' : '';
+
+                if (r.ok) {
+                    toonPlannerStatus('Planner bijgewerkt om ' + laatste + ' (' + r.spelers + ' spelers, '
+                        + r.speeldagen + ' speeldagen, ' + r.matchen + ' matchen)', '#2ecc71');
+                } else if (r.reden === 'niet_ingesteld') {
+                    toonPlannerStatus('Planner niet ingesteld. Ga naar Beheer Matchen en vul de verbinding in.', '#f1c40f');
+                } else if (r.reden === 'match_bezig') {
+                    toonPlannerStatus('Er loopt een match. Vernieuwen kan pas na afloop.', '#f1c40f');
+                } else if (r.reden === 'sleutel') {
+                    toonPlannerStatus('De sleutel klopt niet. Controleer de verbinding in Beheer Matchen.' + oud, '#e74c3c');
+                } else if (r.reden === 'geen_verbinding') {
+                    toonPlannerStatus('Geen verbinding met de planner.' + oud, '#e74c3c');
+                } else {
+                    toonPlannerStatus('Ophalen is mislukt.' + oud, '#e74c3c');
+                }
+            }
+
+            // ==================== DATUMKEUZE ====================
+            window.vulDatumKeuze = function(behoudKeuze) {
+                const veld = document.getElementById('dateSelect');
+                if (!veld) {
+                    return;
+                }
+                const vandaag = formatDateForInput(new Date());
+                const dagen = (state.speeldagen || [])
+                    .filter(d => d && d.datum)
+                    .slice()
+                    .sort((a, b) => a.datum.localeCompare(b.datum));
+
+                // Standaard: vandaag als dat een speeldag is, anders de eerstvolgende, anders de laatste
+                let standaard = vandaag;
+                if (dagen.length > 0) {
+                    const eerstvolgende = dagen.find(d => d.datum >= vandaag);
+                    standaard = eerstvolgende ? eerstvolgende.datum : dagen[dagen.length - 1].datum;
+                }
+
+                // Zolang het nog een gewoon datumveld is, alleen de datum invullen
+                if (veld.tagName !== 'SELECT') {
+                    veld.value = standaard;
+                    state.selectedDate = veld.value;
+                    return;
+                }
+
+                const opties = dagen.length > 0
+                    ? dagen.map(d => ({
+                        waarde: d.datum,
+                        tekst: 'Speeldag ' + d.volgnummer + ' - ' + formatDateFull(d.datum)
+                    }))
+                    : [{ waarde: vandaag, tekst: formatDateFull(vandaag) + ' (geen speeldagen bekend)' }];
+
+                const vorige = veld.value;
+                veld.innerHTML = '';
+                opties.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.waarde;
+                    opt.textContent = o.tekst;
+                    veld.appendChild(opt);
+                });
+                veld.value = (behoudKeuze && opties.some(o => o.waarde === vorige)) ? vorige : standaard;
+                state.selectedDate = veld.value;
+            }
+
+            // ==================== START MATCH MELDEN ====================
+            window.meldStartAanPlanner = function(plannerId, poging) {
+                poging = poging || 1;
+                const verbinding = leesVerbinding();
+                if (!plannerId || !verbinding.adres || !verbinding.sleutel) {
+                    return;
+                }
+                const opnieuw = function() {
+                    if (poging < 3) {
+                        setTimeout(function() { meldStartAanPlanner(plannerId, poging + 1); }, 15000 * poging);
+                    }
+                };
+                const afbreker = new AbortController();
+                const timer = setTimeout(function() { afbreker.abort(); }, 8000);
+                fetch(verbinding.adres + '/api/match/' + plannerId + '/start', {
+                    method: 'POST',
+                    headers: { 'X-API-Key': verbinding.sleutel },
+                    signal: afbreker.signal
+                }).then(function(antwoord) {
+                    if (!antwoord.ok && antwoord.status >= 500) {
+                        opnieuw();
+                    }
+                }).catch(function() {
+                    opnieuw();
+                }).finally(function() {
+                    clearTimeout(timer);
+                });
+            }
+
+            // ==================== UITSLAG VERSTUREN (WACHTRIJ) ====================
+            // Een uitslag blijft in de wachtrij tot de planner bevestigt dat hij binnen is.
+            let uitslagWachtrij = [];
+            let wachtrijBezig = false;
+
+            function bewaarWachtrij() {
+                try {
+                    localStorage.setItem('plannerWachtrij', JSON.stringify(uitslagWachtrij));
+                } catch (fout) {
+                    console.error('Wachtrij kon niet bewaard worden:', fout);
+                }
+            }
+
+            window.laadWachtrij = function() {
+                try {
+                    const opgeslagen = JSON.parse(localStorage.getItem('plannerWachtrij') || '[]');
+                    if (Array.isArray(opgeslagen)) {
+                        opgeslagen.forEach(function(item) {
+                            if (item && item.id && !uitslagWachtrij.some(function(x) { return x.id === item.id; })) {
+                                uitslagWachtrij.push(item);
+                            }
+                        });
+                    }
+                } catch (fout) {
+                    console.error('Wachtrij kon niet gelezen worden:', fout);
+                }
+            };
+
+            window.toonWachtrij = function() {
+                return JSON.parse(JSON.stringify(uitslagWachtrij));
+            };
+
+            function bouwUitslagPayload(match) {
+                const eerste = (match.firstToTarget === 1 || match.firstToTarget === 2) ? match.firstToTarget : null;
+                const naam1 = match.originalP1 || match.p1;
+                return {
+                    score1: match.p1Score,
+                    score2: match.p2Score,
+                    beurten1: match.p1Turns || [],
+                    beurten2: match.p2Turns || [],
+                    hoogste1: match.p1Highest || 0,
+                    hoogste2: match.p2Highest || 0,
+                    wit: match.whitePlayer,
+                    winnaar: match.winner === naam1 ? 1 : 2,
+                    eerste_target: eerste
+                };
+            }
+
+            function toonUitslagStatus(zojuistVerstuurd) {
+                const el = document.getElementById('uitslagStatus');
+                if (!el) {
+                    return;
+                }
+                const wacht = uitslagWachtrij.filter(function(x) { return x.toestand === 'wacht'; }).length;
+                const geweigerd = uitslagWachtrij.filter(function(x) { return x.toestand !== 'wacht'; }).length;
+                let tekst = '';
+                let kleur = '#bdc3c7';
+                if (geweigerd > 0) {
+                    tekst = geweigerd + ' uitslag(en) zijn door de planner geweigerd. Meld het aan de beheerder.';
+                    kleur = '#e74c3c';
+                } else if (wacht > 0) {
+                    tekst = wacht + ' uitslag(en) nog niet verstuurd naar de planner. Dit wordt automatisch opnieuw geprobeerd.';
+                    kleur = '#f1c40f';
+                } else if (zojuistVerstuurd) {
+                    tekst = 'Uitslag verstuurd naar de planner.';
+                    kleur = '#2ecc71';
+                }
+                el.textContent = tekst;
+                el.style.color = kleur;
+                el.style.display = tekst ? 'block' : 'none';
+            }
+
+            window.verwerkWachtrij = async function() {
+                if (wachtrijBezig) {
+                    return;
+                }
+                const verbinding = leesVerbinding();
+                if (!verbinding.adres || !verbinding.sleutel) {
+                    toonUitslagStatus(false);
+                    return;
+                }
+                wachtrijBezig = true;
+                let verstuurd = false;
+                try {
+                    const teDoen = uitslagWachtrij.filter(function(x) { return x.toestand === 'wacht'; });
+                    for (const item of teDoen) {
+                        const afbreker = new AbortController();
+                        const timer = setTimeout(function() { afbreker.abort(); }, 10000);
+                        try {
+                            const antwoord = await fetch(verbinding.adres + '/api/match/' + item.id + '/uitslag', {
+                                method: 'POST',
+                                headers: { 'X-API-Key': verbinding.sleutel, 'Content-Type': 'application/json' },
+                                body: JSON.stringify(item.payload),
+                                signal: afbreker.signal
+                            });
+                            if (antwoord.ok) {
+                                uitslagWachtrij = uitslagWachtrij.filter(function(x) { return x.id !== item.id; });
+                                verstuurd = true;
+                            } else if (antwoord.status === 409) {
+                                item.toestand = 'conflict';
+                            } else if (antwoord.status === 400) {
+                                item.toestand = 'ongeldig';
+                            } else if (antwoord.status === 404) {
+                                item.toestand = 'niet_gevonden';
+                            } else {
+                                break; // verkeerde sleutel of serverprobleem: later opnieuw proberen
+                            }
+                        } catch (fout) {
+                            break; // geen verbinding: later opnieuw proberen
+                        } finally {
+                            clearTimeout(timer);
+                        }
+                    }
+                } finally {
+                    wachtrijBezig = false;
+                    bewaarWachtrij();
+                    toonUitslagStatus(verstuurd);
+                }
+            };
+
+            window.meldUitslagAanPlanner = function(match) {
+                try {
+                    if (!match || !match.plannerId) {
+                        return; // eigen match zonder planner: wordt niet verstuurd
+                    }
+                    if (!uitslagWachtrij.some(function(x) { return x.id === match.plannerId; })) {
+                        uitslagWachtrij.push({
+                            id: match.plannerId,
+                            payload: bouwUitslagPayload(match),
+                            toestand: 'wacht',
+                            aangemaakt: new Date().toISOString()
+                        });
+                        bewaarWachtrij();
+                    }
+                } catch (fout) {
+                    console.error('Uitslag in wachtrij zetten is mislukt:', fout);
+                }
+                verwerkWachtrij();
+            };
+
+            // ==================== LOPENDE MATCH BEWAREN ====================
+            window.bewaarLopendeMatch = function() {
+                try {
+                    if (!state.currentMatch || state.matchEnded) {
+                        return;
+                    }
+                    const snap = {
+                        versie: 1,
+                        bewaardOp: new Date().toISOString(),
+                        match: state.currentMatch,
+                        player1: state.player1,
+                        player2: state.player2,
+                        currentPlayer: state.currentPlayer,
+                        turnNumber: state.turnNumber,
+                        isFirstPlayerInRound: state.isFirstPlayerInRound,
+                        pendingEnd: state.pendingEnd,
+                        firstToTarget: state.firstToTarget,
+                        isNabeurt: state.isNabeurt,
+                        selectedDate: state.selectedDate,
+                        selectedWhitePlayer: state.selectedWhitePlayer
+                    };
+                    localStorage.setItem('biljartLopendeMatch', JSON.stringify(snap));
+                } catch (fout) {
+                    console.error('Lopende match bewaren is mislukt:', fout);
+                }
+            };
+
+            window.wisLopendeMatch = function() {
+                try {
+                    localStorage.removeItem('biljartLopendeMatch');
+                } catch (fout) {
+                    console.error('Lopende match wissen is mislukt:', fout);
+                }
+            };
+
+            window.herstelLopendeMatch = function() {
+                let snap = null;
+                try {
+                    snap = JSON.parse(localStorage.getItem('biljartLopendeMatch') || 'null');
+                } catch (fout) {
+                    return false;
+                }
+                if (!snap || !snap.match || !snap.player1 || !snap.player2) {
+                    return false;
+                }
+
+                const bestaand = (state.matches || []).find(function(m) { return m.id === snap.match.id; });
+                if (bestaand && bestaand.completed) {
+                    wisLopendeMatch();
+                    return false;
+                }
+                if (bestaand) {
+                    Object.assign(bestaand, snap.match);
+                    state.currentMatch = bestaand;
+                } else {
+                    state.matches.push(snap.match);
+                    state.currentMatch = snap.match;
+                }
+
+                state.player1 = snap.player1;
+                state.player2 = snap.player2;
+                state.currentPlayer = snap.currentPlayer;
+                state.turnNumber = snap.turnNumber;
+                state.isFirstPlayerInRound = snap.isFirstPlayerInRound;
+                state.pendingEnd = snap.pendingEnd;
+                state.firstToTarget = snap.firstToTarget;
+                state.isNabeurt = snap.isNabeurt;
+                state.selectedDate = snap.selectedDate || state.selectedDate;
+                state.selectedWhitePlayer = snap.selectedWhitePlayer;
+                state.currentInput = 0;
+                state.matchEnded = false;
+
+                const alert = document.getElementById('matchEndedAlert');
+                if (alert) {
+                    alert.style.display = 'none';
+                    alert.innerHTML = '';
+                }
+                document.getElementById('matchTitle').textContent =
+                    state.currentMatch.p1 + ' vs ' + state.currentMatch.p2;
+                document.getElementById('player1ScoreName').textContent = state.currentMatch.p1;
+                document.getElementById('player2ScoreName').textContent = state.currentMatch.p2;
+                enableScoreButtons();
+                showPage(5);
+                updateScoringPage();
+                return true;
+            };
+
+            // ==================== MATCH AFBREKEN ====================
+            window.meldAfbrekenAanPlanner = function(plannerId, poging) {
+                poging = poging || 1;
+                const verbinding = leesVerbinding();
+                if (!plannerId || !verbinding.adres || !verbinding.sleutel) {
+                    return;
+                }
+                // Een herhaalde poging stopt als dezelfde match intussen opnieuw gespeeld wordt
+                if (poging > 1 && state.currentMatch && state.currentMatch.plannerId === plannerId
+                        && !state.matchEnded && state.currentPage === 5) {
+                    return;
+                }
+                const opnieuw = function() {
+                    if (poging < 3) {
+                        setTimeout(function() { meldAfbrekenAanPlanner(plannerId, poging + 1); }, 15000 * poging);
+                    }
+                };
+                const afbreker = new AbortController();
+                const timer = setTimeout(function() { afbreker.abort(); }, 8000);
+                fetch(verbinding.adres + '/api/match/' + plannerId + '/afbreken', {
+                    method: 'POST',
+                    headers: { 'X-API-Key': verbinding.sleutel },
+                    signal: afbreker.signal
+                }).then(function(antwoord) {
+                    if (!antwoord.ok && antwoord.status >= 500) {
+                        opnieuw();
+                    }
+                }).catch(function() {
+                    opnieuw();
+                }).finally(function() {
+                    clearTimeout(timer);
+                });
+            };
+
+            window.breekMatchAf = function() {
+                if (state.matchEnded || !state.currentMatch) {
+                    showPage(1);
+                    return;
+                }
+                const m = state.currentMatch;
+                if (!confirm('Match afbreken?\n\n' + m.p1 + ' vs ' + m.p2
+                        + '\n\nDe stand van deze match gaat verloren en de match wordt niet geteld.')) {
+                    return;
+                }
+
+                // Spelers en targets terug in hun oorspronkelijke volgorde
+                if (m.originalP1 && m.originalP2) {
+                    m.p1 = m.originalP1;
+                    m.p2 = m.originalP2;
+                    m.target1 = m.originalTarget1;
+                    m.target2 = m.originalTarget2;
+                }
+                m.whitePlayer = null;
+                m.completed = false;
+
+                wisLopendeMatch();
+                state.currentMatch = null;
+                state.selectedWhitePlayer = null;
+                state.firstToTarget = null;
+                state.isNabeurt = false;
+                state.currentInput = 0;
+                state.matchEnded = false;
+
+                saveStateToStorage();
+                meldAfbrekenAanPlanner(m.plannerId);
+                showPage(1);
+            };
+
             // ==================== HELPER FUNCTIES ====================
             function formatDateForInput(date) {
                 const d = new Date(date);
@@ -3133,7 +3672,7 @@ window.showPage = function(pageNum) {
         if (dateInput) {
 
 
-            dateInput.value = formatDateForInput(today);
+            vulDatumKeuze(true);
             state.selectedDate = dateInput.value;
         }
     } else if (actualPageNum === 2) {
@@ -3166,15 +3705,41 @@ window.showPage = function(pageNum) {
     }
 };
 
-            window.goToPage2 = function() {
+            let planner2Bezig = false;
+
+            window.goToPage2 = async function() {
+                if (planner2Bezig) {
+                    return;
+                }
                 const dateInput = document.getElementById('dateSelect');
                 const selectedDate = dateInput.value;
-                
+
                 if (!selectedDate) {
                     alert("Selecteer eerst een datum!");
                     return;
                 }
-                
+
+                const knop = document.querySelector('#page1 .next-btn');
+                const knopTekst = knop ? knop.textContent : '';
+                planner2Bezig = true;
+                if (knop) {
+                    knop.textContent = 'Planner wordt opgehaald...';
+                }
+                try {
+                    // Maximaal 6 seconden wachten, daarna verder met de laatst bewaarde gegevens
+                    await Promise.race([
+                        vernieuwPlanner(),
+                        new Promise(resolve => setTimeout(resolve, 6000))
+                    ]);
+                } catch (fout) {
+                    // verder met de bewaarde gegevens
+                } finally {
+                    planner2Bezig = false;
+                    if (knop) {
+                        knop.textContent = knopTekst;
+                    }
+                }
+
                 state.selectedDate = selectedDate;
                 showPage(2);
             }
@@ -3399,7 +3964,7 @@ window.showPage = function(pageNum) {
                     return;
                 }
                 
-                const newId = state.matches.length > 0 ? Math.max(...state.matches.map(m => m.id)) + 1 : 1;
+                const newId = Math.max(1000000, ...state.matches.map(m => m.id)) + 1;
                 
                 const newMatch = {
                     id: newId,
@@ -3553,6 +4118,9 @@ window.showPage = function(pageNum) {
                 document.getElementById('player2CurrentScore').classList.remove('active');
                 document.getElementById('player2CurrentScore').classList.add('inactive');
                 
+                toonUitslagStatus(false);
+                bewaarLopendeMatch();
+                meldStartAanPlanner(state.currentMatch.plannerId);
                 showPage(5);
                 updateScoringPage();
             }
@@ -3720,6 +4288,7 @@ window.showPage = function(pageNum) {
                         document.querySelectorAll('.dynamic-needed').forEach(el => el.remove());
                         updateSideScoreDisplays(); // UPDATE SIDE SCORES
                         updateScoringPage();
+                        bewaarLopendeMatch();
                         return;
                     } else {
                         // Speler 2 bereikt target eerst -> Match eindigt direct
@@ -3744,6 +4313,8 @@ window.showPage = function(pageNum) {
                     state.turnNumber++;
                 }
                 
+                bewaarLopendeMatch();
+
                 // Reset en update
                 state.currentInput = 0;
                 updateCurrentScoreDisplay();
@@ -3799,8 +4370,16 @@ window.showPage = function(pageNum) {
                 }
                 
                 state.currentMatch.winner = winner;
+
+                // Uitslag naar de planner: eerst in de wachtrij, vóór de gewone opslag hieronder
+                state.currentMatch.firstToTarget = state.firstToTarget === null
+                    ? null
+                    : (state.currentMatch.whitePlayer === 2 ? 3 - state.firstToTarget : state.firstToTarget);
+                meldUitslagAanPlanner(state.currentMatch);
                 
-                saveStateToStorage();
+                if (saveStateToStorage()) {
+                    wisLopendeMatch();
+                }
                 
                 const matchEndedAlert = document.getElementById('matchEndedAlert');
                 if (matchEndedAlert) {
@@ -5788,13 +6367,19 @@ function parseSpeeldagenCSVMetKopteksten(csvText) {
 
             // ==================== STATE MANAGEMENT ====================
             function saveStateToStorage() {
-                const stateToSave = {
-                    players: state.players,
-                    matches: state.matches,
-                    downloadedMatches: state.downloadedMatches,
-                    speeldagen: state.speeldagen
-                };
-                localStorage.setItem('billiardState', JSON.stringify(stateToSave));
+                try {
+                    const stateToSave = {
+                        players: state.players,
+                        matches: state.matches,
+                        downloadedMatches: state.downloadedMatches,
+                        speeldagen: state.speeldagen
+                    };
+                    localStorage.setItem('billiardState', JSON.stringify(stateToSave));
+                    return true;
+                } catch (fout) {
+                    console.error('Opslaan in de browser is mislukt:', fout);
+                    return false;
+                }
             }
 
             function loadStateFromStorage() {
@@ -5860,11 +6445,19 @@ function parseSpeeldagenCSVMetKopteksten(csvText) {
             
             updateTabBadges();
             
-            // Probeer eerst spelers van GitHub te laden
-            //loadPlayersFromGitHub();//
+            // Planner: toon de laatste status en haal op de achtergrond de nieuwste gegevens op
+            toonPlannerStatus();
+            vernieuwPlanner();
+
+            // Uitslagen die nog niet verstuurd zijn: wachtrij laden en proberen te versturen
+            laadWachtrij();
+            verwerkWachtrij();
+            setInterval(verwerkWachtrij, 30000);
+            window.addEventListener('online', verwerkWachtrij);
          
             // Toon pagina 1
             showPage(1);
+            herstelLopendeMatch();
 
         }
     </script>
