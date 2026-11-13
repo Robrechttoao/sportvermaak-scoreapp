@@ -26,10 +26,6 @@ function getPlayers() {
         }
     }
     
-    if (players.length === 0) {
-        players = JSON.parse(localStorage.getItem('biljartPlayers') || '[]');
-    }
-    
     return players;
 }
 
@@ -40,20 +36,29 @@ function getMatches() {
     if (savedState) {
         try {
             const state = JSON.parse(savedState);
-            allMatches = state.matches || [];
+            allMatches = (state.matches || []).concat(state.downloadedMatches || []);
         } catch (e) {
             console.error('❌ Fout bij laden matches:', e);
         }
     }
     
-    // Filter alleen VOLTOOIDE matches
-    const completedMatches = allMatches.filter(m => m.completed === true);
+    // Filter alleen VOLTOOIDE matches van het actieve seizoen
+    let actiefId = null;
+    try {
+        actiefId = JSON.parse(savedState || '{}').actiefSeizoenId || null;
+    } catch (e) {}
+    const completedMatches = allMatches.filter(m => m.completed === true && m.seizoenId === actiefId);
     console.log(`🏁 ${completedMatches.length} voltooide matches voor klassement`);
     
     return completedMatches;
 }
 
 function getSeizoen() {
+    try {
+        const st = JSON.parse(localStorage.getItem('billiardState') || '{}');
+        const actief = (st.seizoenen || []).find(s => s.id === st.actiefSeizoenId);
+        if (actief) return actief.naam;
+    } catch (e) {}
     const savedState = localStorage.getItem('billiardState');
     if (savedState) {
         try {
@@ -67,13 +72,42 @@ function getSeizoen() {
         return players[0].seizoen;
     }
     
-    return '2024-2025';
+    // Seizoen afleiden uit de eerste speeldag (een seizoen start in juli)
+    let dagen = [];
+    try {
+        const s = JSON.parse(localStorage.getItem('billiardState') || '{}');
+        dagen = (s.speeldagen || []).map(d => d.displayDatum).filter(Boolean).sort();
+    } catch (e) {}
+    if (dagen.length > 0) {
+        const p = dagen[0].split('-');
+        const jaar = parseInt(p[0]);
+        const maand = parseInt(p[1]);
+        const start = maand >= 7 ? jaar : jaar - 1;
+        return `${start}-${start + 1}`;
+    }
+    const nu = new Date();
+    const startNu = nu.getMonth() >= 6 ? nu.getFullYear() : nu.getFullYear() - 1;
+    return `${startNu}-${startNu + 1}`;
 }
 
+// ==================== EXACTE MACRO LOGICA ====================
+// ==================== EXACTE MACRO LOGICA ====================
 // ==================== EXACTE MACRO LOGICA ====================
 function berekenExactMacroKlassement() {
     const players = getPlayers();
     const matches = getMatches();
+    
+    // Maak een map van spelernaam naar numerieke TSG
+    const playerTsgMap = {};
+    players.forEach(p => {
+        if (p.name) {
+            let tsg = p.tsg;
+            if (typeof tsg === 'string') {
+                tsg = parseFloat(tsg.replace(',', '.'));
+            }
+            playerTsgMap[p.name] = tsg || 0; // fallback naar 0 indien onbekend
+        }
+    });
     
     // Haal speeldagen uit state (geïmporteerd via CSV)
     let speeldagenData = [];
@@ -82,7 +116,7 @@ function berekenExactMacroKlassement() {
         try {
             const state = JSON.parse(savedState);
             if (state.speeldagen && Array.isArray(state.speeldagen)) {
-                speeldagenData = state.speeldagen;
+                speeldagenData = state.speeldagen.filter(s => s.seizoenId === state.actiefSeizoenId);
             }
         } catch (e) {
             console.error('Fout bij laden speeldagen uit state:', e);
@@ -136,8 +170,35 @@ function berekenExactMacroKlassement() {
         
         spelerMatches.forEach(match => {
             if (puntenPerDatum[match.date]) {
-                const isWinnaar = match.winner === spelerNaam;
-                const matchpunten = isWinnaar ? 2 : 1;
+                // Bepaal score, beurten en target van de speler in deze match
+                let spelerScore = 0;
+                let beurten = 0;
+                let doel = 0;
+                if (match.p1 === spelerNaam) {
+                    spelerScore = match.p1Score || 0;
+                    beurten = match.p1Turns ? match.p1Turns.length : 0;
+                    doel = match.target1 || 0;
+                } else if (match.p2 === spelerNaam) {
+                    spelerScore = match.p2Score || 0;
+                    beurten = match.p2Turns ? match.p2Turns.length : 0;
+                    doel = match.target2 || 0;
+                }
+                
+                // Gewonnen = target gehaald (bij gelijkspel dus beide spelers)
+                const isWinnaar = doel > 0 && spelerScore >= doel;
+                
+                // Excel-regel: gemiddelde minstens target / 20, in maximaal 20 beurten
+                const gemiddelde = beurten > 0 ? spelerScore / beurten : 0;
+                const gemiddeldeGehaald = beurten <= 20 && gemiddelde >= (doel / 20);
+                
+                // Matchpunten: 4 / 3 / 2 / 1
+                let matchpunten;
+                if (isWinnaar) {
+                    matchpunten = gemiddeldeGehaald ? 4 : 2;
+                } else {
+                    matchpunten = gemiddeldeGehaald ? 3 : 1;
+                }
+                
                 puntenPerDatum[match.date].push(matchpunten);
             }
         });
@@ -178,7 +239,6 @@ function berekenExactMacroKlassement() {
         spelersKlassement: gesorteerdeSpelers
     };
 }
-
 // ==================== EXACTE MACRO KLASSEMENT PAGINA ====================
 function loadRankingPage() {
     console.log('🏆 loadRankingPage() - Exacte Excel VBA Macro');
@@ -202,7 +262,7 @@ function loadRankingPage() {
                 <table style="width: ${totaleKolommen * 40 + 100}px; border-collapse: collapse; margin-bottom: 20px;">
                     <tr>
                         <td colspan="${totaleKolommen}" 
-                            style="height: 37.5px; background: #4472c4; color: #c00000; font-family: 'Comic Sans MS'; 
+                            style="height: 37.5px; background: #4472c4; color: #ffe599; font-family: 'Comic Sans MS'; 
                                    font-size: 24px; font-weight: bold; text-align: center; vertical-align: middle; border: 1px solid #000000;">
                             Klassement Biljartclub SPORT & VERMAAK ${seizoen}
                         </td>
@@ -393,7 +453,7 @@ function loadStatsPage() {
         let html = `
             <div class="stats-header">
                 <h2>📊 Speler Statistieken</h2>
-                <p>${players.length} spelers, ${matches.length} voltooide matches</p>
+                <p style="color: #ffffff;">${players.length} spelers, ${matches.length} voltooide matches</p>
             </div>
             <div class="players-stats-grid">
         `;
@@ -410,7 +470,9 @@ function loadStatsPage() {
                 html += `
                     <div class="player-stats-card no-data-card">
                         <h3>${spelerNaam}</h3>
-                        <p class="no-data-text">Geen voltooide matches</p>
+                        <p class="no-data-text" style="color: #ff6b6b;">
+                            Geen voltooide matches
+                        </p>
                         <div class="stats-summary">
                             <p><strong>TSG:</strong> ${player.tsg || 'N/A'}</p>
                             <p><strong>Target:</strong> ${player.target || 'N/A'}</p>
@@ -423,7 +485,7 @@ function loadStatsPage() {
                 return;
             }
             
-            const gewonnenMatches = spelerMatches.filter(m => m.winner === spelerNaam);
+            const gewonnenMatches = spelerMatches.filter(m => m.p1 === spelerNaam ? (m.p1Score || 0) >= (m.target1 || 1) : (m.p2Score || 0) >= (m.target2 || 1));
             const winPercentage = (gewonnenMatches.length / spelerMatches.length * 100).toFixed(1);
             
             // Bereken gemiddelde score
@@ -463,11 +525,11 @@ function loadStatsPage() {
                     </button>
                     
                     <div class="stats-summary">
-                        <p><strong>Gespeeld:</strong> ${spelerMatches.length}</p>
-                        <p><strong>Gewonnen:</strong> ${gewonnenMatches.length}</p>
+                        <p><strong>Gesp.:</strong> ${spelerMatches.length}</p>
+                        <p><strong>Gew.:</strong> ${gewonnenMatches.length}</p>
                         <p><strong>Win %:</strong> ${winPercentage}%</p>
-                        <p><strong>Gemiddelde:</strong> ${gemiddelde}</p>
-                        <p><strong>Hoogste reeks:</strong> ${hoogsteReeks}</p>
+                        <p><strong>Gem.:</strong> ${gemiddelde}</p>
+                        <p><strong>HR:</strong> ${hoogsteReeks}</p>
                         <p><strong>TSG:</strong> ${player.tsg || 'N/A'}</p>
                     </div>
                 </div>
@@ -531,7 +593,8 @@ function generateExcelStylePlayerDetail(playerName) {
             (match.p1Turns ? match.p1Turns.length : 0) : 
             (match.p2Turns ? match.p2Turns.length : 0);
         const hoogsteReeks = isPlayer1 ? (match.p1Highest || 0) : (match.p2Highest || 0);
-        const gewonnen = match.winner === playerName;
+        const doel = isPlayer1 ? (match.target1 || 0) : (match.target2 || 0);
+        const gewonnen = doel > 0 && punten >= doel;
         
         const aantalPartijen = index + 1;
         if (gewonnen) totaalGewonnen++;
@@ -556,7 +619,11 @@ function generateExcelStylePlayerDetail(playerName) {
         
         const percGewonnen = (totaalGewonnen / aantalPartijen) * 100;
         const percVerloren = 100 - percGewonnen;
-        const matchpunten = gewonnen ? 2 : 1;
+        
+        // Matchpunten volgens de Excel-regel: gemiddelde minstens target / 20, in maximaal 20 beurten
+        const gemiddeldeDezeMatch = gemiddeldePerPartij; // punten/beurten
+        const gemiddeldeGehaald = beurten <= 20 && gemiddeldeDezeMatch >= (doel / 20);
+        const matchpunten = gewonnen ? (gemiddeldeGehaald ? 4 : 2) : (gemiddeldeGehaald ? 3 : 1);
         
         resultRows.push({
             speeldag: Math.floor(index / 2) + 1,
@@ -580,7 +647,6 @@ function generateExcelStylePlayerDetail(playerName) {
     
     return createExcelTableHTML(playerName, player, resultRows);
 }
-
 function formatDateForKlassement(dateStr) {
     if (!dateStr) return '';
     try {
@@ -605,10 +671,20 @@ function createExcelTableHTML(playerName, player, rows) {
     const maxHoogsteReeks = rows.reduce((max, row) => Math.max(max, row.hoogsteReeks), 0);
     const totaalMatchpunten = rows.reduce((sum, row) => sum + row.matchpunten, 0);
     
+    // TSG en Target van de speler (algemeen)
+    let tsgSpeler = '—';
+    if (player.tsg) {
+        const num = parseFloat(player.tsg.toString().replace(',', '.'));
+        if (!isNaN(num)) {
+            tsgSpeler = num.toFixed(2).replace('.', ',');
+        }
+    }
+    const targetSpeler = player.target || '—';
+    
     let html = `
         <div class="excel-table-container">
             <div class="table-header">
-                <h3>${playerName} - Excel Stijl Overzicht</h3>
+                <h3>${playerName} - Overzicht</h3>
                 <button class="small-btn" onclick="exportPlayerExcel('${playerName}')">📥 Exporteer</button>
             </div>
             
@@ -621,10 +697,10 @@ function createExcelTableHTML(playerName, player, rows) {
                             <th style="background: #f4dbbc; text-align: center;">${targetEersteZes}</th>
                             <th colspan="3" style="text-align: center; background: #c8e6c9; color: #000;">Te maken punten eerste 6 matchen</th>
                             <th style="background: #f4dbbc; text-align: center;">${tsgEersteZes}</th>
-                            <th style="background: #c8e6c9; text-align: center;">Gemiddelde</th>
-                            <th style="background: #ffcccc; text-align: center; color: #d00;">1,00</th>
-                            <th style="background: #c8e6c9; text-align: center;">Te maken punten</th>
-                            <th style="background: #ffcccc; text-align: center; color: #d00;">20</th>
+                            <th style="background: #c8e6c9; text-align: center;">Gemiddelde<br><span style="font-size:0.8em;">(TSG)</span></th>
+                            <th style="background: #ffcccc; text-align: center; color: #d00;">${tsgSpeler}</th>
+                            <th style="background: #c8e6c9; text-align: center;">Te maken punten<br><span style="font-size:0.8em;">(Target)</span></th>
+                            <th style="background: #ffcccc; text-align: center; color: #d00;">${targetSpeler}</th>
                             <th rowspan="2" style="background: #c8e6c9; vertical-align: middle; text-align: center;">Behaalde<br>matchpunten</th>
                         </tr>
                         
@@ -646,6 +722,7 @@ function createExcelTableHTML(playerName, player, rows) {
                             <th>%<br>Verloren</th>
                         </tr>
                     </thead>
+                    
                     
                     <tbody>
     `;
@@ -754,29 +831,81 @@ function showSpelerDetail(spelerNaam) {
     
     const excelTable = generateExcelStylePlayerDetail(spelerNaam);
     
+    // Bouw ref-values alleen voor ingevelde velden
+    const refItems = [
+        { label: 'TSG:', value: player.tsg },
+        { label: 'Target:', value: player.target },
+        { label: 'TSG eerste 6:', value: player.tsgEersteZes },
+        { label: 'Target eerste 6:', value: player.targetEersteZes }
+    ].filter(item => {
+        // Toon alleen als waarde bestaat, niet leeg is en niet gelijk aan 'N/A'
+        return item.value && 
+               item.value !== 'N/A' && 
+               item.value !== '' && 
+               item.value !== null && 
+               item.value !== undefined;
+    });
+    
+    // Genereer HTML voor de ref-values als er minstens één item is
+    const refValuesHtml = refItems.length > 0 
+        ? `<div class="ref-values">
+            ${refItems.map(item => `
+                <div class="ref-item">
+                    <span class="ref-label">${item.label}</span>
+                    <span class="ref-value">${item.value}</span>
+                </div>
+            `).join('')}
+           </div>`
+        : ''; // Geen ref-values als alles leeg is
+    
     document.getElementById('statsContent').innerHTML = `
+        <style>
+            .detail-header {
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 20px;
+                margin-bottom: 20px;
+            }
+            .ref-values {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 15px;
+                margin-left: 0; /* links uitlijnen */
+            }
+            .ref-item {
+                background: #e9ecef;
+                padding: 4px 12px;
+                border-radius: 20px;
+                white-space: nowrap;
+                font-size: 14px;
+            }
+            .ref-label {
+                font-weight: 600;
+                margin-right: 5px;
+                color: #495057;
+            }
+            .ref-value {
+                background: #e9ecef;
+                font-weight: 700;
+                color: #0d6efd;
+            }
+            @media (max-width: 768px) {
+                .detail-header {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+                .ref-values {
+                    margin-left: 0;
+                    width: 100%;
+                }
+            }
+        </style>
         <div class="excel-detail-view">
             <div class="detail-header">
                 <button class="back-btn" onclick="loadStatsPage()">← Terug naar overzicht</button>
-                <h2>${spelerNaam} - Excel Stijl Overzicht</h2>
-                <div class="ref-values">
-                    <div class="ref-item">
-                        <span class="ref-label">TSG:</span>
-                        <span class="ref-value">${player.tsg || 'N/A'}</span>
-                    </div>
-                    <div class="ref-item">
-                        <span class="ref-label">Target:</span>
-                        <span class="ref-value">${player.target || 'N/A'}</span>
-                    </div>
-                    <div class="ref-item">
-                        <span class="ref-label">TSG eerste 6:</span>
-                        <span class="ref-value">${player.tsgEersteZes || 'N/A'}</span>
-                    </div>
-                    <div class="ref-item">
-                        <span class="ref-label">Target eerste 6:</span>
-                        <span class="ref-value">${player.targetEersteZes || 'N/A'}</span>
-                    </div>
-                </div>
+                <h2>${spelerNaam} - Overzicht</h2>
+                ${refValuesHtml}
             </div>
             ${excelTable}
         </div>
@@ -858,9 +987,12 @@ function exportSpelerData(spelerNaam) {
         const tegenstander = isPlayer1 ? match.p2 : match.p1;
         const eigenScore = isPlayer1 ? (match.p1Score || 0) : (match.p2Score || 0);
         const tegenScore = isPlayer1 ? (match.p2Score || 0) : (match.p1Score || 0);
-        const gewonnen = match.winner === spelerNaam ? 'Ja' : 'Nee';
+        const doel = isPlayer1 ? (match.target1 || 0) : (match.target2 || 0);
+        const beurten = isPlayer1 ? (match.p1Turns ? match.p1Turns.length : 0) : (match.p2Turns ? match.p2Turns.length : 0);
+        const gewonnen = (doel > 0 && eigenScore >= doel) ? 'Ja' : 'Nee';
         const hoogsteReeks = isPlayer1 ? (match.p1Highest || 0) : (match.p2Highest || 0);
-        const matchpunten = gewonnen === 'Ja' ? 2 : 1;
+        const gemiddeldeGehaald = beurten > 0 && beurten <= 20 && (eigenScore / beurten) >= (doel / 20);
+        const matchpunten = gewonnen === 'Ja' ? (gemiddeldeGehaald ? 4 : 2) : (gemiddeldeGehaald ? 3 : 1);
         
         csv += `${match.date};${tegenstander};${eigenScore};${tegenScore};${gewonnen};${hoogsteReeks};${matchpunten}\n`;
     });
@@ -995,6 +1127,170 @@ function refreshKlassement() {
     }
 }
 
+// ============================================================
+// ✅ PUUR OVERZICHT ONDERBROKEN MATCH (GEEN RESTORE, ALLEEN WEERGEVEN)
+// ============================================================
+
+function showBackupOverview() {
+  console.log('🔍 showBackupOverview() gestart');
+  
+  const modal = document.getElementById('backupRecoveryModal');
+  const list = document.getElementById('backupList');
+  
+  if (!modal || !list) {
+    console.error('❌ Elementen niet gevonden');
+    return;
+  }
+
+  const saved = localStorage.getItem('currentMatchBackup');
+  
+  if (!saved) {
+    list.innerHTML = '<p style="color:#95a5a6; text-align:center; padding:20px;">💾 Geen opgeslagen match gevonden.</p>';
+  } else {
+    try {
+      const d = JSON.parse(saved);
+      
+      // Data ophalen (rekening houdend met zowel platte als geneste structuur)
+      const p1 = d.player1 || d.matchData?.player1 || 'Speler 1';
+      const p2 = d.player2 || d.matchData?.player2 || 'Speler 2';
+      const s1 = d.p1Score ?? d.matchData?.p1Score ?? 0;
+      const s2 = d.p2Score ?? d.matchData?.p2Score ?? 0;
+      
+      // Beurten arrays ophalen
+      const turns1 = d.p1Turns || d.matchData?.p1Turns || [];
+      const turns2 = d.p2Turns || d.matchData?.p2Turns || [];
+      
+      // 🚀 HOOGSTE REEKS BEREKENEN UIT BEURTEN (valt terug op 0 als leeg)
+      const h1 = d.p1Highest ?? d.matchData?.p1Highest ?? (turns1.length ? Math.max(...turns1) : 0);
+      const h2 = d.p2Highest ?? d.matchData?.p2Highest ?? (turns2.length ? Math.max(...turns2) : 0);
+      
+      // ✅ TIJDSTIP: Gebruik `timestamp` voor het exacte opslagmoment (incl. uur/min)
+      const rawDate = d.timestamp || d.matchData?.timestamp || d.date;
+      let formattedDate = 'Onbekend';
+      if (rawDate) {
+        const dateObj = new Date(rawDate);
+        if (!isNaN(dateObj.getTime())) {
+          formattedDate = dateObj.toLocaleString('nl-NL', {
+            day: 'numeric', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          }).replace(',', ' om');
+        }
+      }
+
+      list.innerHTML = `
+        <div style="background:#2c3e50; padding:20px; border-radius:12px; color:#ecf0f1; text-align:center;">
+          <div style="font-size:1.2em; font-weight:600; margin-bottom:10px;">⚔️ ${p1} vs ${p2}</div>
+          <div style="color:#7f8c8d; font-size:0.9em; margin-bottom:15px;">📅 ${formattedDate}</div>
+          
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; text-align:center;">
+            <div style="background:#34495e; padding:15px; border-radius:8px;">
+              <div style="font-weight:bold; color:#ffffff; margin-bottom:5px; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">⚪ ${p1} (Wit)</div>
+              <div style="font-size:1.8em; font-weight:bold;">${s1} pt</div>
+              <div style="font-size:0.9em; color:#bdc3c7; margin-top:5px;">🔄 ${turns1.length} beurten | 🎯 HR: ${h1}</div>
+            </div>
+            <div style="background:#34495e; padding:15px; border-radius:8px;">
+              <div style="font-weight:bold; color:#f1c40f; margin-bottom:5px;">🟡 ${p2} (Geel)</div>
+              <div style="font-size:1.8em; font-weight:bold;">${s2} pt</div>
+              <div style="font-size:0.9em; color:#bdc3c7; margin-top:5px;">🔄 ${turns2.length} beurten | 🎯 HR: ${h2}</div>
+            </div>
+          </div>
+          
+          <p style="margin-top:15px; color:#95a5a6; font-size:0.85em; line-height:1.4;">
+            ℹ️ Dit is alleen een overzicht.<br>Start een nieuwe match en vul de waarden handmatig in.
+          </p>
+        </div>
+      `;
+    } catch (e) {
+      console.error('❌ Fout bij parsen backup:', e);
+      list.innerHTML = '<p style="color:#e74c3c; text-align:center; padding:20px;">❌ Fout bij laden van backup</p>';
+    }
+  }
+  
+  modal.style.display = 'flex';
+  console.log('✅ Modal getoond');
+}
+
+function closeBackupModal() {
+  document.getElementById('backupRecoveryModal').style.display = 'none';
+}
+// 🏁 MATCH SAMENVATTING RENDEREN
+function renderMatchSummary() {
+  const p1 = state.player1;
+  const p2 = state.player2;
+
+  const avg1 = p1.turns.length > 0 ? (p1.score / p1.turns.length).toFixed(2).replace('.', ',') : '0,00';
+  const avg2 = p2.turns.length > 0 ? (p2.score / p2.turns.length).toFixed(2).replace('.', ',') : '0,00';
+
+  const tsg1 = p1.fixedTSG || '—';
+  const tsg2 = p2.fixedTSG || '—';
+
+  const statHTML = (emoji, label, value) => `
+    <div class="summary-stat">
+      <div class="summary-label">${emoji} ${label}</div>
+      <div class="summary-value">${value}</div>
+    </div>`;
+
+  document.getElementById('summaryPlayer1').innerHTML = `
+    <div class="summary-player-name">${state.currentMatch.p1} ⚪</div>
+    ${statHTML('🔄', 'Beurten', p1.turns.length)}
+    ${statHTML('🎯', 'Score', p1.score)}
+    ${statHTML('📊', 'Gemiddelde', avg1)}
+    ${statHTML('🌟', 'Hoogste Reeks', p1.highestSeries)}
+    ${statHTML('📈', 'Te Spelen Gem.', tsg1)}
+  `;
+
+  document.getElementById('summaryPlayer2').innerHTML = `
+    <div class="summary-player-name">${state.currentMatch.p2} 🟡</div>
+    ${statHTML('🔄', 'Beurten', p2.turns.length)}
+    ${statHTML('🎯', 'Score', p2.score)}
+    ${statHTML('📊', 'Gemiddelde', avg2)}
+    ${statHTML('🌟', 'Hoogste Reeks', p2.highestSeries)}
+    ${statHTML('📈', 'Te Spelen Gem.', tsg2)}
+  `;
+}
+// 🗣️ AUDIO FEEDBACK VOOR PUNTEN (Web Speech API)
+let scoreVoice = null;
+let lastSpeechTime = 0;
+const SPEECH_COOLDOWN = 650; // ms - voorkomt overlappende geluiden bij snel klikken
+
+function initScoreAudio() {
+  // Browser laadt voices asynchroon; wacht op signaal of laad direct
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = () => { loadDutchVoice(); };
+  }
+  loadDutchVoice();
+}
+
+function loadDutchVoice() {
+  const voices = speechSynthesis.getVoices();
+  if (!voices.length) return;
+  
+  // Filter op Nederlands, bij voorkeur mannelijk
+  const nlVoices = voices.filter(v => v.lang.startsWith('nl'));
+  // Probekende NL stemmen, fallback naar eerste NL stem
+  scoreVoice = nlVoices.find(v => /male|mannelijk|david|xander|claas|robert/i.test(v.name.toLowerCase())) || nlVoices[0] || null;
+}
+
+function playScoreSound(currentPoints) {
+  if (!window.speechSynthesis || currentPoints <= 0) return;
+  const now = Date.now();
+  if (now - lastSpeechTime < SPEECH_COOLDOWN) return; // Debounce
+
+  if (!scoreVoice) loadDutchVoice();
+
+  const utterance = new SpeechSynthesisUtterance(String(currentPoints));
+  utterance.lang = 'nl-NL';
+  if (scoreVoice) utterance.voice = scoreVoice;
+  utterance.rate = 1.05; // Iets vlotter dan standaard
+  utterance.pitch = 1.0;
+
+  speechSynthesis.cancel(); // Stop vorige direct als die nog loopt
+  speechSynthesis.speak(utterance);
+  lastSpeechTime = now;
+}
+
+// Initialiseer bij laden script
+initScoreAudio();
 // ==================== GLOBAL EXPORTS ====================
 window.loadStatsPage = loadStatsPage;
 window.loadRankingPage = loadRankingPage;
@@ -1007,5 +1303,8 @@ window.exportSpelerData = exportSpelerData;
 window.exportPlayerExcel = exportPlayerExcel;
 window.printMacroKlassement = printMacroKlassement;
 window.refreshKlassement = refreshKlassement;
+window.showBackupOverview = showBackupOverview;
+window.closeBackupModal = closeBackupModal;
+window.renderMatchSummary = renderMatchSummary;
 
 console.log('🎯 Excel VBA Macro stats.js functies geregistreerd');
