@@ -1158,7 +1158,7 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
     <div class="summary-half summary-left" id="summaryPlayer1"></div>
     <div class="summary-half summary-right" id="summaryPlayer2"></div>
   </div>
-  <div class="kiosk-hint">⬆️ Druk kort op de pijl omhoog toets,hou dande pijl-omhoog toets 3 seconden ingedrukt voor het hoofdmenu</div>
+  <div class="kiosk-hint">Druk op de knop voor "einde beurt" (Tab) om naar het hoofdmenu te gaan</div>
 </div>
 <div id="page7" class="page">
 <div class="header">
@@ -2103,6 +2103,18 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+// Tab (de toets van "einde beurt") brengt je op het matchoverzicht terug naar het hoofdmenu.
+// De eerste 2 seconden wordt Tab genegeerd, zodat een dubbele klik bij het einde van de match niets doet.
+let overzichtGetoondOp = 0;
+document.addEventListener('keydown', function(e) {
+    if (state.currentPage === 6 && e.key === 'Tab') {
+        e.preventDefault();
+        if (Date.now() - overzichtGetoondOp >= 2000) {
+            showPage(1);
+        }
+    }
+});
+
 let overzichtOmhoogStart = null;
 document.addEventListener('keydown', function(e) {
     if (state.currentPage === 6 && (e.key === 'PageUp' || e.key === 'ArrowUp')) {
@@ -2159,9 +2171,11 @@ function formatDateFull(dateStr) { if(!dateStr) return ''; const d=new Date(date
 function enableScoreButtons() { document.querySelectorAll('.score-btn').forEach(btn=>{btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}); const c=document.getElementById('confirmScoreBtn'); if(c){c.disabled=false;c.style.opacity='1';c.style.cursor='pointer';} }
 function disableScoreButtons() { document.querySelectorAll('.score-btn').forEach(btn=>{btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}); const c=document.getElementById('confirmScoreBtn'); if(c){c.disabled=true;c.style.opacity='0.5';c.style.cursor='not-allowed';} }
 function updateCurrentTurnSize() { const ct=document.getElementById('currentPlayerDisplay'); if(!ct) return; ct.classList.toggle('has-extra-info', state.isNabeurt || state.firstToTarget); }
+// Punten van de beurt die nog bezig is (enkel voor de speler die aan de beurt is, nooit na het einde van de match)
+function liveInvoer(speler) { return (!state.matchEnded && state.currentPlayer === speler) ? state.currentInput : 0; }
 function updateSideScoreDisplays() {
-    document.getElementById('p1TotalVal').textContent = state.player1.score;
-    document.getElementById('p2TotalVal').textContent = state.player2.score;
+    document.getElementById('p1TotalVal').textContent = state.player1.score + liveInvoer(1);
+    document.getElementById('p2TotalVal').textContent = state.player2.score + liveInvoer(2);
 }
 function updateCurrentScoreDisplay() {
     // === 1. ELEMENTEN OPHALEN ===
@@ -2206,9 +2220,11 @@ function updateCurrentScoreDisplay() {
     if (p2NeededCell) p2NeededCell.classList.toggle('danger', n2 <= 5 && n2 > 0);
 
     // === 7. 📊 STAT-BLOKJES UPDATEN (symmetrisch: P1 links, P2 rechts) ===
-    const fmtAvg = (p) => p.turns.length > 0 
-        ? (p.score / p.turns.length).toFixed(2).replace('.', ',') 
-        : '0,00';
+    // Gemiddelde: zodra er punten in de lopende beurt staan, telt die beurt live mee
+    const fmtAvg = (p, extra) => {
+        const n = p.turns.length + (extra > 0 ? 1 : 0);
+        return n > 0 ? ((p.score + extra) / n).toFixed(2).replace('.', ',') : '0,00';
+    };
     
     // Helper: zet target om naar 2 decimalen met komma
     const fmtTarget = (val) => {
@@ -2220,7 +2236,7 @@ function updateCurrentScoreDisplay() {
     const p1Played = document.getElementById('p1PlayedAvg');
     const p1Highest = document.getElementById('p1Highest');
     const p1Target = document.getElementById('p1TargetAvg');
-    if(p1Played) p1Played.textContent = fmtAvg(state.player1);
+    if(p1Played) p1Played.textContent = fmtAvg(state.player1, liveInvoer(1));
     if(p1Highest) p1Highest.textContent = state.player1.highestSeries || 0;
     if(p1Target) p1Target.textContent = fmtTarget(state.player1.fixedTSG);
     
@@ -2228,7 +2244,7 @@ function updateCurrentScoreDisplay() {
     const p2Played = document.getElementById('p2PlayedAvg');
     const p2Highest = document.getElementById('p2Highest');
     const p2Target = document.getElementById('p2TargetAvg');
-    if(p2Played) p2Played.textContent = fmtAvg(state.player2);
+    if(p2Played) p2Played.textContent = fmtAvg(state.player2, liveInvoer(2));
     if(p2Highest) p2Highest.textContent = state.player2.highestSeries || 0;
     if(p2Target) p2Target.textContent = fmtTarget(state.player2.fixedTSG);
 }
@@ -2242,6 +2258,7 @@ window.showPage = function(pageNum) {
             && state.player1.turns.length === 0 && state.player2.turns.length === 0) {
         annuleerLopendeMatch();
     }
+    if (actualPageNum === 6) { overzichtGetoondOp = Date.now(); }
     const pageId = `page${actualPageNum}`;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(pageId);
