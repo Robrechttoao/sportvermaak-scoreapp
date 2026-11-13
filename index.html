@@ -1041,6 +1041,23 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 #p1PlayedAvg.gem-boven, #p2PlayedAvg.gem-boven { background: rgba(46, 140, 90, 0.78) !important; }
 /* Totaalscore van de speler die niet aan de beurt is: een beetje gedimd (niet tijdens/na het einde van de match) */
 #p1TotalCell.gedimd-totaal, #p2TotalCell.gedimd-totaal { opacity: 0.74 !important; }
+
+/* ========== BEURTOVERZICHT: VASTE TEGELS EN KLEUREN ==========
+   Elke beurt is een tegel van vaste grootte (niet meer over de hele breedte). Vult eerst naar beneden, dan de volgende kolom. */
+.turns-list {
+    grid-template-rows: repeat(8, 36px) !important;
+    grid-auto-columns: 118px !important;
+    justify-content: start !important;
+    gap: 6px 10px !important;
+}
+.turn-row { padding: 0 4px !important; }
+.turn-row span { font-size: 1.15rem !important; }
+.turn-row.turn-nul { background: #f4c7c2 !important; }       /* geen punt gemaakt: lichtrood */
+.turn-row.turn-score { background: #c8eccf !important; }     /* gescoord: lichtgroen */
+.turn-row.turn-hoogste { background: #c4dcf6 !important; }   /* hoogste reeks van de speler: lichtblauw (mag meermaals) */
+
+/* De knoppen + en - zijn weg (de presenter doet alles): de blokjes eronder krijgen wat ruimte ertussen */
+.score-controls { gap: 3vw !important; }
 </style>
 </head>
 <body id="bodyElement">
@@ -1175,20 +1192,17 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
     </div>
 </div>
 <div class="score-controls">
-    <button class="score-btn plus-btn" onclick="changeScore(1)">+</button>
-    <div class="stat-group left-group">
+        <div class="stat-group left-group">
         <div class="stat-box" id="p1PlayedAvg">0,00</div>
         <div class="stat-box" id="p1Highest">0</div>
         <div class="stat-box" id="p1TargetAvg">−</div>
     </div>
-    <button class="score-btn minus-btn" onclick="changeScore(-1)">−</button>
-    <div class="stat-group right-group">
+        <div class="stat-group right-group">
         <div class="stat-box" id="p2TargetAvg">−</div>
         <div class="stat-box" id="p2Highest">0</div>
         <div class="stat-box" id="p2PlayedAvg">0,00</div>
     </div>
-    <button class="score-btn plus-btn" onclick="changeScore(1)">+</button>
-</div>
+    </div>
 <div class="action-buttons" style="display: none;">
 <button class="action-btn undo-btn" onclick="undoLastAdd()" id="undoBtn" disabled>↩️ Einde beurt ongedaan maken</button>
 <button class="action-btn confirm-btn" onclick="addScore()" id="confirmScoreBtn">Einde beurt voor <span id="currentPlayerBtnName">Speler</span> en score toevoegen</button>
@@ -2631,7 +2645,7 @@ function updateScoringPage() {
     const renderTurns = (turns, playerName) => {
         if (!turns.length) return '<div style="text-align:center;color:#666;padding:20px;font-size:0.9em;">Nog geen beurten</div>';
         return [...turns].reverse().map((t, i) => 
-            `<div class="turn-row"><span>B${turns.length - i}: ${t}</span></div>`
+            `<div class="turn-row ${t === 0 ? 'turn-nul' : (t === Math.max(...turns) ? 'turn-hoogste' : 'turn-score')}"><span>B${turns.length - i}: ${t}</span></div>`
         ).join('');
     };
 
