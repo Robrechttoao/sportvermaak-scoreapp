@@ -1261,9 +1261,8 @@ leftBtn.innerHTML = '🏠 Hoofdmenu';
 leftBtn.onclick = () => showPage(1);
 leftBtn.disabled = false;
 leftBtn.style.background = 'linear-gradient(135deg, #2ecc71, #27ae60)';
-rightBtn.innerHTML = '↩️ Ongedaan';
 rightBtn.disabled = true;
-rightBtn.style.opacity = '0.5';
+rightBtn.style.visibility = 'hidden';
 return;
 }
 const hasTurns = (state.player1.turns.length > 0 || state.player2.turns.length > 0);
@@ -1278,12 +1277,12 @@ rightBtn.onclick = () => showPage(1);
 rightBtn.disabled = false;
 rightBtn.style.background = '#3498db';
 rightBtn.style.opacity = '1';
+rightBtn.style.visibility = 'visible';
 } else {
-rightBtn.innerHTML = '↩️ Ongedaan';
-rightBtn.onclick = () => undoLastAdd();
-rightBtn.disabled = !lastStateBeforeAdd;
-rightBtn.style.opacity = rightBtn.disabled ? '0.5' : '1';
-rightBtn.style.background = '#3498db';
+// Ongedaan maken gaat met een lange druk omlaag (toets B). Geen knop meer, de plaats blijft vrij.
+rightBtn.onclick = null;
+rightBtn.disabled = true;
+rightBtn.style.visibility = 'hidden';
 }
 }
 
@@ -1419,17 +1418,7 @@ function initPresenterControls() {
             pageUpStartTime = null;
 
             if (holdDuration >= 2000) {
-                // Lang ingedrukt: alleen naar home als 0 beurten
-                const p1T = state.player1.turns?.length || 0;
-                const p2T = state.player2.turns?.length || 0;
-                if (p1T === 0 && p2T === 0) {
-                    if (typeof window.showPage === 'function') window.showPage(1);
-                    else {
-                        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-                        document.getElementById('page1')?.classList.add('active');
-                    }
-                }
-                // Als er al beurten zijn: doe niets (geen navigatie)
+                // Lang ingedrukt: niets. De presenter mag een match nooit verlaten (alleen de muis, via de knop Hoofdmenu).
             } else {
                 // Kort ingedrukt: +1 punt
                 if (now - lastScoreTime >= COOLDOWN) {
@@ -1992,6 +1981,7 @@ window.bewaarLopendeMatch = function() {
 window.wisLopendeMatch = function() {
     try {
         localStorage.removeItem('biljartLopendeMatch');
+        localStorage.removeItem('currentMatchBackup'); // het overzicht "Onderbroken match" toont dan niets meer
     } catch (fout) {
         console.error('Lopende match wissen is mislukt:', fout);
     }
@@ -2103,77 +2093,6 @@ window.breekMatchAf = function() {
     annuleerLopendeMatch();
     state.currentMatch = null;
     showPage(1);
-};
-
-// ---------- Matchoverzicht na het einde van een match (pagina 6) ----------
-window.renderMatchSummary = function() {
-    const m = state.currentMatch;
-    if (!m) {
-        return;
-    }
-    const gem = function(p) {
-        return p.turns.length > 0 ? (p.score / p.turns.length).toFixed(2).replace('.', ',') : '0,00';
-    };
-    const helft = function(naam, p, gewonnen) {
-        return '<div class="summary-player-name">' + (gewonnen ? '🏆 ' : '') + naam + '</div>'
-            + '<div class="summary-stat"><div class="summary-label">Score</div><div class="summary-value">' + p.score + ' / ' + p.target + '</div></div>'
-            + '<div class="summary-stat"><div class="summary-label">Beurten</div><div class="summary-value">' + p.turns.length + '</div></div>'
-            + '<div class="summary-stat"><div class="summary-label">Gemiddelde</div><div class="summary-value">' + gem(p) + '</div></div>'
-            + '<div class="summary-stat"><div class="summary-label">Hoogste reeks</div><div class="summary-value">' + (p.highestSeries || 0) + '</div></div>';
-    };
-    const l = document.getElementById('summaryPlayer1');
-    const r = document.getElementById('summaryPlayer2');
-    if (l) {
-        l.innerHTML = helft(m.p1, state.player1, m.p1Won);
-    }
-    if (r) {
-        r.innerHTML = helft(m.p2, state.player2, m.p2Won);
-    }
-};
-
-// ---------- Knop "Onderbroken match" ----------
-window.showBackupOverview = function() {
-    const modal = document.getElementById('backupRecoveryModal');
-    const lijst = document.getElementById('backupList');
-    if (!modal || !lijst) {
-        return;
-    }
-    const snap = leesLopendeMatch();
-    if (!snap) {
-        lijst.innerHTML = '<div style="text-align:center;color:#95a5a6;padding:20px;"><p>Geen onderbroken match gevonden</p></div>';
-    } else {
-        const m = snap.match;
-        const tijd = new Date(snap.bewaardOp).toLocaleString('nl-BE');
-        lijst.innerHTML = '<div class="match-card" style="margin:0;cursor:default;">'
-            + '<h3 style="margin:0 0 6px 0;">' + m.p1 + ' ⚔️ ' + m.p2 + '</h3>'
-            + '<p style="margin:0;font-size:0.9em;color:#bdc3c7;">Bewaard: ' + tijd
-            + '<br>Stand: ' + snap.player1.score + ' - ' + snap.player2.score + ' (beurt ' + snap.turnNumber + ')</p>'
-            + '<div style="display:flex;gap:10px;margin-top:12px;">'
-            + '<button onclick="selectBackup()" style="background:#2ecc71;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;">Hervat</button>'
-            + '<button onclick="wisBackup()" style="background:#e74c3c;color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;">Wissen</button>'
-            + '</div></div>';
-    }
-    modal.style.display = 'flex';
-};
-
-window.selectBackup = function() {
-    closeBackupModal();
-    herstelLopendeMatch();
-};
-
-window.wisBackup = function() {
-    if (!confirm('Deze onderbroken match definitief wissen?')) {
-        return;
-    }
-    const snap = leesLopendeMatch();
-    wisLopendeMatch();
-    if (snap && snap.match) {
-        const m = (state.matches || []).find(function(x) { return x.id === snap.match.id; });
-        zetMatchTerug(m);
-        saveStateToStorage();
-        meldAfbrekenAanPlanner(snap.match.plannerId);
-    }
-    closeBackupModal();
 };
 
 // ---------- Toetsen: afbreken (Ctrl+Shift+A) en terug naar het hoofdmenu vanaf het overzicht ----------
