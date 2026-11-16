@@ -1085,6 +1085,16 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
         font-size: clamp(2.2rem, 2.6vw, 3.4rem) !important;
     }
 }
+
+/* ========== KOP: NAMEN GROTER ==========
+   De app berekent hoe groot de namen kunnen zijn (--naamgrootte): zo groot mogelijk, op één regel, binnen de breedte
+   en zonder dat het scherm moet scrollen. De cijfers en de zwaarden schalen mee. */
+@media (min-width: 651px) {
+    .header-match-info { --naamgrootte: 64px; }
+    .header-name { font-size: var(--naamgrootte) !important; }
+    .header-target { font-size: calc(var(--naamgrootte) * 1.125) !important; }
+    .header-vs { font-size: var(--naamgrootte) !important; }
+}
 </style>
 </head>
 <body id="bodyElement">
@@ -2252,6 +2262,45 @@ function dimTotalen() {
     if (a) a.classList.toggle('gedimd-totaal', bezig && state.currentPlayer !== 1);
     if (b) b.classList.toggle('gedimd-totaal', bezig && state.currentPlayer !== 2);
 }
+
+// ---------- Kop: namen zo groot mogelijk ----------
+// Groeit vanaf de oude grootte (64 px) zolang beide namen op één regel passen, alles in de breedte past
+// en er onderaan nog ruimte over is (het scorescherm hoeft dus niet te scrollen).
+function pasKopAan() {
+    const info = document.querySelector('.header-match-info');
+    const n1 = document.getElementById('headerName1');
+    const n2 = document.getElementById('headerName2');
+    const p5 = document.getElementById('page5');
+    const kaarten = p5 ? p5.querySelector('.players-container') : null;
+    if (!info || !n1 || !n2 || !p5 || !kaarten || info.offsetParent === null) {
+        return;
+    }
+    const basis = 64;
+    const nodig = 30; // paginamarge, ruimte onder de kaarten en een beetje lucht
+    const ruimteOnder = function() {
+        return p5.getBoundingClientRect().bottom - kaarten.getBoundingClientRect().bottom;
+    };
+    info.style.setProperty('--naamgrootte', basis + 'px');
+    if (ruimteOnder() < nodig) {
+        return; // geen ruimte over in de hoogte: oude grootte houden
+    }
+    let px = Math.min(window.innerWidth * 0.055, 120);
+    while (px > basis) {
+        info.style.setProperty('--naamgrootte', px + 'px');
+        const opEenRegel = n1.getBoundingClientRect().height <= px * 1.5 && n2.getBoundingClientRect().height <= px * 1.5;
+        const pastInBreedte = info.scrollWidth <= info.clientWidth + 1;
+        if (opEenRegel && pastInBreedte && ruimteOnder() >= nodig) {
+            return;
+        }
+        px *= 0.95;
+    }
+    info.style.setProperty('--naamgrootte', basis + 'px');
+}
+window.addEventListener('resize', function() {
+    if (state.currentPage === 5) {
+        pasKopAan();
+    }
+});
 function clearOldCache() { if (localStorage.getItem('app_version') !== APP_VERSION) { localStorage.setItem('app_version', APP_VERSION); } }
 function getAdminPassword() { return localStorage.getItem('biljartAdminPassword') || null; }
 function setAdminPassword(newPassword) { if (newPassword && newPassword.trim() !== '') { localStorage.setItem('biljartAdminPassword', newPassword.trim()); return true; } return false; }
@@ -2377,6 +2426,7 @@ window.showPage = function(pageNum) {
         annuleerLopendeMatch();
     }
     if (actualPageNum === 6) { overzichtGetoondOp = Date.now(); }
+    if (actualPageNum === 5) { setTimeout(pasKopAan, 0); }
     const pageId = `page${actualPageNum}`;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(pageId);
