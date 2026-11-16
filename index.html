@@ -2265,8 +2265,8 @@ function dimTotalen() {
 }
 
 // ---------- Kop: korte namen ("Voornaam A.") ----------
-// Namen staan als "Achternaam Voornaam" (bv. "Osaer Dominiek") en worden "Dominiek O.".
-// Heeft de speler in de planner een "korte naam", dan wordt die gebruikt zoals ze is.
+// Heeft de speler in de planner een korte naam (de planner maakt die zelf, bv. "Dominiek O."), dan wordt die gebruikt.
+// Anders volgt de app dezelfde regel: de naam staat als "Voornaam Achternaam" en wordt "Voornaam A.".
 window.kopNaam = function(naam) {
     const volledig = String(naam || '').trim();
     const speler = (state.players || []).find(function(p) { return p.name === volledig || p.naam === volledig; });
@@ -2277,8 +2277,8 @@ window.kopNaam = function(naam) {
     if (delen.length < 2) {
         return volledig;
     }
-    const voornaam = delen[delen.length - 1];
-    const achternaam = delen.slice(0, -1).join(' ');
+    const voornaam = delen[0];
+    const achternaam = delen.slice(1).join(' ');
     return voornaam + ' ' + achternaam.charAt(0).toUpperCase() + '.';
 };
 
