@@ -1073,6 +1073,18 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 #headerTarget2 { margin-left: auto !important; }
 #headerName1 { text-align: right !important; }
 #headerName2 { text-align: left !important; }
+
+/* ========== KLEINE BLOKJES: GEMIDDELDE, HOOGSTE REEKS, TSG ==========
+   Groter (breder en met grotere cijfers), en bij beide spelers dezelfde volgorde van links naar rechts:
+   gespeeld gemiddelde, hoogste reeks, TSG. Op kleinere schermen (tot 1100 breed) blijven de oude maten. */
+.stat-group.right-group { flex-direction: row-reverse !important; }
+@media (min-width: 1101px) {
+    .score-controls .stat-box {
+        width: clamp(140px, 9.5vw, 210px) !important;
+        height: clamp(120px, 11vh, 170px) !important;
+        font-size: clamp(2.2rem, 2.6vw, 3.4rem) !important;
+    }
+}
 </style>
 </head>
 <body id="bodyElement">
