@@ -998,7 +998,8 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
     --cijfer: clamp(4.5rem, 8.4vw, 12rem);   /* cijfers van 1 en 2 tekens */
     --beurtkleur: #7ed6ff;                  /* kleur van het beurtnummer in het middenblok */
     gap: 1vw !important;
-    padding: 20px 0.8vw !important;
+    padding: 8px 0.8vw !important;           /* minder lucht boven/onder de rij: ruimte voor de grotere kop */
+    margin: 16px 0 !important;
     flex-wrap: nowrap !important;
 }
 .score-cell {
@@ -1086,14 +1087,14 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
     }
 }
 
-/* ========== KOP: NAMEN GROTER ==========
-   De app berekent hoe groot de namen kunnen zijn (--naamgrootte): zo groot mogelijk, op één regel, binnen de breedte
-   en zonder dat het scherm moet scrollen. De cijfers en de zwaarden schalen mee. */
+/* ========== KOP: 1,5 KEER ZO GROOT, MET KORTE NAMEN ==========
+   De app zet --naamgrootte (96 px bij 1920 breed, schaalt mee met het scherm). Cijfers en zwaarden schalen in verhouding mee. */
 @media (min-width: 651px) {
-    .header-match-info { --naamgrootte: 64px; }
-    .header-name { font-size: var(--naamgrootte) !important; }
-    .header-target { font-size: calc(var(--naamgrootte) * 1.125) !important; }
-    .header-vs { font-size: var(--naamgrootte) !important; }
+    .header-match-info { --naamgrootte: 96px; }
+    .header-name { font-size: var(--naamgrootte) !important; line-height: 1.05 !important; }
+    .header-target { font-size: calc(var(--naamgrootte) * 1.125) !important; line-height: 1 !important; }
+    .header-vs { font-size: var(--naamgrootte) !important; line-height: 1 !important; }
+    #page5 .header { margin-bottom: 8px !important; padding-bottom: 6px !important; }
 }
 </style>
 </head>
@@ -1350,8 +1351,8 @@ function updateHeaderTargets() {
     if (state.currentMatch) {
         if (t1) t1.textContent = state.player1.target;
         if (t2) t2.textContent = state.player2.target;
-        if (n1) n1.textContent = state.currentMatch.p1;
-        if (n2) n2.textContent = state.currentMatch.p2;
+        if (n1) n1.textContent = kopNaam(state.currentMatch.p1);
+        if (n2) n2.textContent = kopNaam(state.currentMatch.p2);
     }
 }
 function updateHeaderButtons() {
@@ -2263,38 +2264,44 @@ function dimTotalen() {
     if (b) b.classList.toggle('gedimd-totaal', bezig && state.currentPlayer !== 2);
 }
 
-// ---------- Kop: namen zo groot mogelijk ----------
-// Groeit vanaf de oude grootte (64 px) zolang beide namen op één regel passen, alles in de breedte past
-// en er onderaan nog ruimte over is (het scorescherm hoeft dus niet te scrollen).
+// ---------- Kop: korte namen ("Voornaam A.") ----------
+// Namen staan als "Achternaam Voornaam" (bv. "Osaer Dominiek") en worden "Dominiek O.".
+// Heeft de speler in de planner een "korte naam", dan wordt die gebruikt zoals ze is.
+window.kopNaam = function(naam) {
+    const volledig = String(naam || '').trim();
+    const speler = (state.players || []).find(function(p) { return p.name === volledig || p.naam === volledig; });
+    if (speler && speler.korte_naam && String(speler.korte_naam).trim()) {
+        return String(speler.korte_naam).trim();
+    }
+    const delen = volledig.split(/\s+/);
+    if (delen.length < 2) {
+        return volledig;
+    }
+    const voornaam = delen[delen.length - 1];
+    const achternaam = delen.slice(0, -1).join(' ');
+    return voornaam + ' ' + achternaam.charAt(0).toUpperCase() + '.';
+};
+
+// ---------- Kop: grootte ----------
+// De kop is 1,5 keer zo groot als vroeger (96 px bij een scherm van 1920 breed, schaalt mee met de breedte, nooit kleiner
+// dan de oude 64 px). Is een naam toch te lang, dan wordt het lettertype net zoveel kleiner dat alles op één regel past.
 function pasKopAan() {
     const info = document.querySelector('.header-match-info');
     const n1 = document.getElementById('headerName1');
     const n2 = document.getElementById('headerName2');
-    const p5 = document.getElementById('page5');
-    const kaarten = p5 ? p5.querySelector('.players-container') : null;
-    if (!info || !n1 || !n2 || !p5 || !kaarten || info.offsetParent === null) {
+    if (!info || !n1 || !n2 || info.offsetParent === null) {
         return;
     }
-    const basis = 64;
-    const nodig = 30; // paginamarge, ruimte onder de kaarten en een beetje lucht
-    const ruimteOnder = function() {
-        return p5.getBoundingClientRect().bottom - kaarten.getBoundingClientRect().bottom;
-    };
-    info.style.setProperty('--naamgrootte', basis + 'px');
-    if (ruimteOnder() < nodig) {
-        return; // geen ruimte over in de hoogte: oude grootte houden
-    }
-    let px = Math.min(window.innerWidth * 0.055, 120);
-    while (px > basis) {
+    let px = Math.max(64, Math.min(150, window.innerWidth * 0.05));
+    for (let i = 0; i < 40; i++) {
         info.style.setProperty('--naamgrootte', px + 'px');
-        const opEenRegel = n1.getBoundingClientRect().height <= px * 1.5 && n2.getBoundingClientRect().height <= px * 1.5;
+        const opEenRegel = n1.getBoundingClientRect().height <= px * 1.4 && n2.getBoundingClientRect().height <= px * 1.4;
         const pastInBreedte = info.scrollWidth <= info.clientWidth + 1;
-        if (opEenRegel && pastInBreedte && ruimteOnder() >= nodig) {
+        if ((opEenRegel && pastInBreedte) || px <= 40) {
             return;
         }
         px *= 0.95;
     }
-    info.style.setProperty('--naamgrootte', basis + 'px');
 }
 window.addEventListener('resize', function() {
     if (state.currentPage === 5) {
@@ -2574,8 +2581,8 @@ window.startMatch = function() {
     document.getElementById('matchEndedAlert').style.display='none';
     document.getElementById('headerTarget1').textContent = state.player1.target;
     document.getElementById('headerTarget2').textContent = state.player2.target;
-    document.getElementById('headerName1').textContent = state.currentMatch.p1;
-    document.getElementById('headerName2').textContent = state.currentMatch.p2;
+    document.getElementById('headerName1').textContent = kopNaam(state.currentMatch.p1);
+    document.getElementById('headerName2').textContent = kopNaam(state.currentMatch.p2);
     document.getElementById('p1CurrentVal').textContent = '0';
     document.getElementById('p2CurrentVal').textContent = '0';
     document.getElementById('p1TotalVal').textContent = '0';
