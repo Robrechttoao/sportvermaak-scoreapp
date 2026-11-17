@@ -1591,6 +1591,7 @@ window.bewaarVerbinding = function() {
     }
     sleutelVeld.value = '';
     toonVerbindingStatus('Bewaard. Klik op "Test verbinding" om te controleren.', '#2ecc71');
+    vernieuwPlanner(true);
 };
 
 window.testVerbinding = async function() {
@@ -1614,6 +1615,7 @@ window.testVerbinding = async function() {
         });
         if (antwoord.ok) {
             toonVerbindingStatus('Verbonden met de planner.', '#2ecc71');
+            vernieuwPlanner(true);
         } else if (antwoord.status === 401) {
             toonVerbindingStatus('De planner is bereikbaar, maar de sleutel klopt niet.', '#e74c3c');
         } else {
@@ -1801,12 +1803,18 @@ function toonPlannerStatus(tekst, kleur) {
     el.style.color = kleur || '#bdc3c7';
 }
 
-window.vernieuwPlanner = async function() {
+window.laatsteVerversing = 0;
+
+// stil = true: op de achtergrond, zonder de keuzelijst met speeldagen opnieuw op te bouwen
+window.vernieuwPlanner = async function(stil) {
     if (plannerBezig) {
         return;
     }
     plannerBezig = true;
-    toonPlannerStatus('Planner wordt opgehaald...', '#bdc3c7');
+    window.laatsteVerversing = Date.now();
+    if (!stil) {
+        toonPlannerStatus('Planner wordt opgehaald...', '#bdc3c7');
+    }
     let r;
     try {
         r = await haalPlannerOp();
@@ -1814,6 +1822,7 @@ window.vernieuwPlanner = async function() {
         r = { ok: false, reden: 'fout' };
     } finally {
         plannerBezig = false;
+        window.laatsteVerversing = Date.now();
     }
 
     const laatste = formatSyncTijd(localStorage.getItem('plannerLaatsteSync'));
@@ -1822,7 +1831,7 @@ window.vernieuwPlanner = async function() {
     if (r.ok) {
         toonPlannerStatus('Planner bijgewerkt om ' + laatste + ' (' + r.spelers + ' spelers, '
             + r.speeldagen + ' speeldagen, ' + r.matchen + ' matchen)', '#2ecc71');
-        if (state.currentPage === 1) {
+        if (!stil && state.currentPage === 1) {
             // Startpagina opnieuw opbouwen met de nieuwe speeldagen, gekozen dag behouden
             const d = document.getElementById('dateSelect');
             const vorige = d ? d.value : '';
@@ -2610,6 +2619,7 @@ window.showPage = function(pageNum) {
     }
     if (actualPageNum === 6) { overzichtGetoondOp = Date.now(); }
     if (actualPageNum === 5) { setTimeout(pasKopAan, 0); }
+    if (actualPageNum === 1) { setTimeout(function() { toonHerstelBalk(); if (Date.now() - window.laatsteVerversing > 4000) { vernieuwPlanner(true); } }, 0); }
     const pageId = `page${actualPageNum}`;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(pageId);
@@ -3180,6 +3190,7 @@ vernieuwPlanner();
 verwerkWachtrij();
 setInterval(verwerkWachtrij, 30000);
 window.addEventListener('online', verwerkWachtrij);
+setInterval(function() { if (state.currentPage === 1) { vernieuwPlanner(true); } }, 30000);
 }
 </script>
 <script src="stats.js"></script>
