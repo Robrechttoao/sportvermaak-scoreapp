@@ -1108,6 +1108,7 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 <button class="download-btn" onclick="checkAdminPassword()">📤 Beheer Matchen</button>
 </div>
 </div>
+<div id="herstelBalk" style="display:none; background:#34495e; border-left:6px solid #f1c40f; border-radius:10px; padding:16px 22px; margin:15px auto; max-width:900px; color:#f1c40f;"></div>
 <div class="selection-container">
 <div class="selection-title">Selecteer speeldag</div>
 <select id="dateSelect" class="date-input"></select>
@@ -1740,6 +1741,7 @@ window.haalPlannerOp = async function() {
     state.actiefSeizoenId = sid;
     state.speeldagen = lokaleDagen.concat(plannerDagen);
     state.matches = nieuweLijst;
+    window.plannerLopendeStanden = Array.isArray(data.lopende_matchen) ? data.lopende_matchen : [];
 
     if (!saveStateToStorage()) {
         return { ok: false, reden: 'opslaan' };
@@ -1831,6 +1833,7 @@ window.vernieuwPlanner = async function() {
             }
         }
         updateTabBadges();
+        toonHerstelBalk();
     } else if (r.reden === 'niet_ingesteld') {
         toonPlannerStatus('Planner niet ingesteld. Ga naar Beheer Matchen en vul de verbinding in.', '#f1c40f');
     } else if (r.reden === 'match_bezig') {
@@ -2035,6 +2038,7 @@ window.verwerkWachtrij = async function() {
 };
 
 window.meldUitslagAanPlanner = function(match) {
+    stopStandVerzenden();
     try {
         if (!match || !match.plannerId) {
             return; // eigen match zonder planner: wordt niet verstuurd
@@ -2076,6 +2080,7 @@ window.bewaarLopendeMatch = function() {
             selectedWhitePlayer: state.selectedWhitePlayer
         };
         localStorage.setItem('biljartLopendeMatch', JSON.stringify(snap));
+        stuurStandNaarPlanner(snap);
     } catch (fout) {
         console.error('Lopende match bewaren is mislukt:', fout);
     }
@@ -2169,6 +2174,7 @@ function zetMatchTerug(m) {
 
 // Een match zonder één beurt verlaten: stil afbreken (er is niets te verliezen)
 window.annuleerLopendeMatch = function() {
+    stopStandVerzenden();
     const m = state.currentMatch;
     zetMatchTerug(m);
     wisLopendeMatch();
@@ -2308,6 +2314,176 @@ window.addEventListener('resize', function() {
         pasKopAan();
     }
 });
+
+// ---------- Elke beurt een kopie van de stand naar de planner ----------
+// Op de achtergrond, zonder te wachten. Lukt het niet, dan merkt niemand er iets van: de volgende beurt stuurt de nieuwste stand.
+let standBezig = false;
+let standWacht = null;
+let standAfbreker = null;
+
+function stuurStandNaarPlanner(snap) {
+    try {
+        const m = snap && snap.match;
+        const verbinding = leesVerbinding();
+        if (!m || !m.plannerId || !verbinding.adres || !verbinding.sleutel) {
+            return; // eigen match zonder planner, of planner niet ingesteld
+        }
+        standWacht = { id: m.plannerId, snap: snap };
+        verwerkStand();
+    } catch (fout) {
+        // nooit het spel storen
+    }
+}
+
+function verwerkStand() {
+    if (standBezig || !standWacht) {
+        return;
+    }
+    const taak = standWacht;
+    standWacht = null;
+    standBezig = true;
+    const verbinding = leesVerbinding();
+    standAfbreker = new AbortController();
+    const afbreker = standAfbreker;
+    const timer = setTimeout(function() { afbreker.abort(); }, 8000);
+    let belofte;
+    try {
+        belofte = fetch(verbinding.adres + '/api/match/' + taak.id + '/stand', {
+            method: 'POST',
+            headers: { 'X-API-Key': verbinding.sleutel, 'Content-Type': 'application/json' },
+            body: JSON.stringify(taak.snap),
+            signal: afbreker.signal
+        });
+    } catch (fout) {
+        belofte = Promise.reject(fout);
+    }
+    belofte.catch(function() {
+        // geen verbinding of afgebroken: de volgende beurt stuurt de nieuwste stand
+    }).finally(function() {
+        clearTimeout(timer);
+        standBezig = false;
+        standAfbreker = null;
+        if (standWacht) {
+            verwerkStand();
+        }
+    });
+}
+
+// Bij het einde of afbreken van een match: niets meer sturen
+function stopStandVerzenden() {
+    standWacht = null;
+    if (standAfbreker) {
+        try { standAfbreker.abort(); } catch (fout) { /* niets */ }
+    }
+}
+
+// ---------- Een onderbroken match van de planner terugzetten (andere pc of schone browser) ----------
+window.plannerLopendeStanden = [];
+const HERSTEL_MAX_UREN = 12;
+
+function zoekHerstelKandidaat() {
+    const lokaal = leesLopendeMatch();
+    const nu = Date.now();
+    let beste = null;
+    (window.plannerLopendeStanden || []).forEach(function(s) {
+        if (!s || !s.stand || !s.stand.match) {
+            return;
+        }
+        const tijd = Date.parse(s.bijgewerkt_op);
+        if (isNaN(tijd) || nu - tijd > HERSTEL_MAX_UREN * 3600 * 1000) {
+            return; // te oud: niet meer van vanavond
+        }
+        const id = s.match_id;
+        const lm = (state.matches || []).find(function(m) { return m.plannerId === id; });
+        if (lm && lm.completed) {
+            return; // hier al afgerond, de uitslag is onderweg
+        }
+        if (uitslagWachtrij.some(function(x) { return x.id === id; })) {
+            return;
+        }
+        if (lokaal && lokaal.match && lokaal.match.plannerId === id
+                && Date.parse(lokaal.bewaardOp) >= Date.parse(s.stand.bewaardOp)) {
+            return; // deze pc heeft dezelfde of een nieuwere stand
+        }
+        if (!beste || tijd > Date.parse(beste.bijgewerkt_op)) {
+            beste = s;
+        }
+    });
+    return beste;
+}
+
+window.toonHerstelBalk = function() {
+    const balk = document.getElementById('herstelBalk');
+    if (!balk) {
+        return;
+    }
+    const s = state.currentPage === 1 ? zoekHerstelKandidaat() : null;
+    if (!s) {
+        balk.style.display = 'none';
+        balk.textContent = '';
+        return;
+    }
+    const st = s.stand;
+    const beurten = (st.player1.turns ? st.player1.turns.length : 0) + (st.player2.turns ? st.player2.turns.length : 0);
+    const d = new Date(s.bijgewerkt_op);
+    const uur = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+
+    balk.textContent = '';
+    const titel = document.createElement('div');
+    titel.style.cssText = 'font-weight:bold; font-size:1.2em; margin-bottom:6px;';
+    titel.textContent = 'Onderbroken match gevonden';
+    const tekst = document.createElement('div');
+    tekst.style.cssText = 'font-size:1.05em; margin-bottom:12px; color:#ecf0f1;';
+    tekst.textContent = kopNaam(st.match.p1) + ' - ' + kopNaam(st.match.p2) + ', stand ' + st.player1.score + ' - '
+        + st.player2.score + ' na ' + beurten + ' beurten (bewaard om ' + uur + ')';
+    const knoppen = document.createElement('div');
+    knoppen.style.cssText = 'display:flex; gap:12px; flex-wrap:wrap;';
+    const hervat = document.createElement('button');
+    hervat.type = 'button';
+    hervat.tabIndex = -1;
+    hervat.textContent = 'Hervatten';
+    hervat.style.cssText = 'background:#2ecc71; color:white; border:none; padding:12px 26px; border-radius:8px; font-size:1.05em; cursor:pointer;';
+    hervat.onclick = function() { herstelVanPlanner(s.match_id); };
+    const weg = document.createElement('button');
+    weg.type = 'button';
+    weg.tabIndex = -1;
+    weg.textContent = 'Weggooien';
+    weg.style.cssText = 'background:#e74c3c; color:white; border:none; padding:12px 26px; border-radius:8px; font-size:1.05em; cursor:pointer;';
+    weg.onclick = function() { weggooiVanPlanner(s.match_id); };
+    knoppen.appendChild(hervat);
+    knoppen.appendChild(weg);
+    balk.appendChild(titel);
+    balk.appendChild(tekst);
+    balk.appendChild(knoppen);
+    balk.style.display = 'block';
+};
+
+window.herstelVanPlanner = function(id) {
+    const s = (window.plannerLopendeStanden || []).find(function(x) { return x.match_id === id; });
+    if (!s || !s.stand) {
+        return false;
+    }
+    try {
+        localStorage.setItem('biljartLopendeMatch', JSON.stringify(s.stand));
+    } catch (fout) {
+        alert('Hervatten is mislukt: de browser kan de gegevens niet bewaren.');
+        return false;
+    }
+    return herstelLopendeMatch();
+};
+
+window.weggooiVanPlanner = function(id) {
+    if (!confirm('Deze onderbroken match weggooien? De stand gaat verloren en de match wordt in de planner weer vrijgegeven.')) {
+        return;
+    }
+    meldAfbrekenAanPlanner(id);
+    window.plannerLopendeStanden = (window.plannerLopendeStanden || []).filter(function(x) { return x.match_id !== id; });
+    const lokaal = leesLopendeMatch();
+    if (lokaal && lokaal.match && lokaal.match.plannerId === id) {
+        wisLopendeMatch();
+    }
+    toonHerstelBalk();
+};
 function clearOldCache() { if (localStorage.getItem('app_version') !== APP_VERSION) { localStorage.setItem('app_version', APP_VERSION); } }
 function getAdminPassword() { return localStorage.getItem('biljartAdminPassword') || null; }
 function setAdminPassword(newPassword) { if (newPassword && newPassword.trim() !== '') { localStorage.setItem('biljartAdminPassword', newPassword.trim()); return true; } return false; }
