@@ -1287,6 +1287,11 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 <p id="verbindingStatus" style="margin-top: 12px; color: #bdc3c7; font-size: 0.9em;"></p>
 <p style="margin-top: 8px; color: #95a5a6; font-size: 0.8em;">Het adres en de sleutel worden alleen in de browser van deze pc bewaard. Ze staan nooit in de code.</p>
 </div>
+<div id="geweigerdBeheer" class="download-section" style="display: none; border-left-color: #e74c3c;">
+<h3 style="color: #e74c3c;">Geweigerde uitslagen</h3>
+<p id="geweigerdTekst" style="margin-bottom: 12px; color: #e74c3c;"></p>
+<button class="download-btn" onclick="wisGeweigerdeUitslagen()" style="background: #e74c3c;">Geweigerde uitslagen wissen</button>
+</div>
 <div class="download-section" style="border-left-color: #2ecc71;">
 <h3 style="color: #2ecc71;">💾 Back-up van de planner</h3>
 <p style="margin-bottom: 12px; color: #bdc3c7; font-size: 0.9em;">Maakt een back-up van alle gegevens op de planner (de volledige database en alle uitslagen als csv in één zipbestand) en downloadt ze op deze pc. De back-up blijft ook op de planner bewaard.</p>
@@ -2005,6 +2010,7 @@ function toonUitslagStatus(zojuistVerstuurd) {
     el.textContent = tekst;
     el.style.color = kleur;
     el.style.display = tekst ? 'block' : 'none';
+    bijwerkGeweigerd(geweigerd);
 }
 
 window.verwerkWachtrij = async function() {
@@ -2663,6 +2669,33 @@ window.maakBackupEnDownload = async function() {
         zetBackupMelding('Back-up mislukt: ' + reden + '. Probeer het opnieuw.', '#e74c3c', 600000);
     }
 };
+
+// ---------- Geweigerde uitslagen uit de wachtrij kunnen wissen (Beheer) ----------
+// Een uitslag die de planner weigert (bijvoorbeeld omdat hij daar intussen is aangepast) blijft anders voor altijd staan.
+function bijwerkGeweigerd(aantal) {
+    const blok = document.getElementById('geweigerdBeheer');
+    if (!blok) {
+        return;
+    }
+    blok.style.display = aantal > 0 ? 'block' : 'none';
+    const tekst = document.getElementById('geweigerdTekst');
+    if (tekst) {
+        tekst.textContent = aantal + ' uitslag(en) zitten vast in de wachtrij, omdat de planner ze weigerde (bijvoorbeeld omdat de uitslag daar intussen is aangepast).';
+    }
+}
+
+window.wisGeweigerdeUitslagen = function() {
+    const aantal = uitslagWachtrij.filter(function(x) { return x.toestand !== 'wacht'; }).length;
+    if (aantal === 0) {
+        return;
+    }
+    if (!confirm(aantal + ' geweigerde uitslag(en) uit de wachtrij wissen?\n\nDe planner heeft voor die matchen al een uitslag (of kent ze niet). Controleer die eerst in de planner bij Uitslagen.')) {
+        return;
+    }
+    uitslagWachtrij = uitslagWachtrij.filter(function(x) { return x.toestand === 'wacht'; });
+    bewaarWachtrij();
+    toonUitslagStatus(false);
+};
 function clearOldCache() { if (localStorage.getItem('app_version') !== APP_VERSION) { localStorage.setItem('app_version', APP_VERSION); } }
 function getAdminPassword() { return localStorage.getItem('biljartAdminPassword') || null; }
 function setAdminPassword(newPassword) { if (newPassword && newPassword.trim() !== '') { localStorage.setItem('biljartAdminPassword', newPassword.trim()); return true; } return false; }
@@ -2790,7 +2823,7 @@ window.showPage = function(pageNum) {
     if (actualPageNum === 6) { overzichtGetoondOp = Date.now(); }
     if (actualPageNum === 5) { setTimeout(pasKopAan, 0); }
     if (actualPageNum === 1) { setTimeout(function() { toonHerstelBalk(); if (Date.now() - window.laatsteVerversing > 4000) { vernieuwPlanner(true); } toonBackupBlok(); }, 0); }
-    if (actualPageNum === 7) { setTimeout(toonBackupBlok, 0); }
+    if (actualPageNum === 7) { setTimeout(function() { toonBackupBlok(); toonUitslagStatus(false); }, 0); }
     const pageId = `page${actualPageNum}`;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(pageId);
