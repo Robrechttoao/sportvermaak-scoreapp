@@ -1114,6 +1114,7 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 <select id="dateSelect" class="date-input"></select>
 <button class="next-btn" onclick="goToPage2()">Maak match of kies een match uit de lijst →</button>
 </div>
+<div id="backupBlok" style="display:none; background:#34495e; border-left:6px solid #3498db; border-radius:10px; padding:16px 22px; margin:15px auto; max-width:900px; color:#ecf0f1;"></div>
 <button onclick="showPage(8)" style="font-size:1.2rem; padding:14px 24px;">📊 Statistieken</button>
 <button onclick="showPage(9)" style="font-size:1.2rem; padding:14px 24px;">🏆 Rangschikking</button>
 </div>
@@ -1285,6 +1286,12 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 <button class="download-btn" onclick="testVerbinding()" style="background: #3498db;">Test verbinding</button>
 <p id="verbindingStatus" style="margin-top: 12px; color: #bdc3c7; font-size: 0.9em;"></p>
 <p style="margin-top: 8px; color: #95a5a6; font-size: 0.8em;">Het adres en de sleutel worden alleen in de browser van deze pc bewaard. Ze staan nooit in de code.</p>
+</div>
+<div class="download-section" style="border-left-color: #2ecc71;">
+<h3 style="color: #2ecc71;">💾 Back-up van de planner</h3>
+<p style="margin-bottom: 12px; color: #bdc3c7; font-size: 0.9em;">Maakt een back-up van alle gegevens op de planner (de volledige database en alle uitslagen als csv in één zipbestand) en downloadt ze op deze pc. De back-up blijft ook op de planner bewaard.</p>
+<button class="download-btn" id="backupBeheerKnop" onclick="maakBackupEnDownload()" style="background: #2ecc71; width: 100%; padding: 15px;">💾 Back-up maken en uitslagen downloaden</button>
+<p id="backupBeheerStatus" style="margin-top: 12px; color: #bdc3c7; font-size: 0.9em;"></p>
 </div>
 <div class="download-section">
 <h3>📥 Download Resultaten</h3>
@@ -1744,6 +1751,7 @@ window.haalPlannerOp = async function() {
     state.speeldagen = lokaleDagen.concat(plannerDagen);
     state.matches = nieuweLijst;
     window.plannerLopendeStanden = Array.isArray(data.lopende_matchen) ? data.lopende_matchen : [];
+    window.plannerBackupInfo = data.back_up || null;
 
     if (!saveStateToStorage()) {
         return { ok: false, reden: 'opslaan' };
@@ -1843,6 +1851,7 @@ window.vernieuwPlanner = async function(stil) {
         }
         updateTabBadges();
         toonHerstelBalk();
+        toonBackupBlok();
     } else if (r.reden === 'niet_ingesteld') {
         toonPlannerStatus('Planner niet ingesteld. Ga naar Beheer Matchen en vul de verbinding in.', '#f1c40f');
     } else if (r.reden === 'match_bezig') {
@@ -2493,6 +2502,167 @@ window.weggooiVanPlanner = function(id) {
     }
     toonHerstelBalk();
 };
+
+// ---------- Back-up van de planner: één knop die een back-up maakt op de planner en ze downloadt op deze pc ----------
+window.plannerBackupInfo = null;
+window.backupMelding = null;      // { tekst, kleur, tot } : laatste resultaat, blijft een tijdje zichtbaar
+let backupBezig = false;
+
+function backupTijd(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) {
+        return '';
+    }
+    return d.toLocaleDateString('nl-BE') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function backupSamenvatting(info) {
+    if (!info) {
+        return '';
+    }
+    const nieuwe = Math.max(0, info.uitslagen_nu - info.laatste_aantal);
+    const laatste = info.laatste_op
+        ? 'Laatste back-up: ' + backupTijd(info.laatste_op) + ' (' + info.laatste_aantal + ' uitslagen).'
+        : 'Er is nog geen back-up gemaakt.';
+    return laatste + ' Nu: ' + info.uitslagen_nu + ' uitslagen' + (nieuwe > 0 ? ', dus ' + nieuwe + ' nieuwe.' : '.');
+}
+
+function zetBackupMelding(tekst, kleur, duurMs) {
+    window.backupMelding = { tekst: tekst, kleur: kleur, tot: Date.now() + (duurMs || 120000) };
+    toonBackupBlok();
+}
+
+window.toonBackupBlok = function() {
+    const info = window.plannerBackupInfo;
+    const melding = window.backupMelding && window.backupMelding.tot > Date.now() ? window.backupMelding : null;
+
+    // Beheer: vaste knop met de status eronder
+    const beheer = document.getElementById('backupBeheerStatus');
+    if (beheer) {
+        beheer.textContent = melding ? melding.tekst : backupSamenvatting(info);
+        beheer.style.color = melding ? melding.kleur : '#bdc3c7';
+    }
+    const beheerKnop = document.getElementById('backupBeheerKnop');
+    if (beheerKnop) {
+        beheerKnop.disabled = backupBezig;
+    }
+
+    // Startpagina: verschijnt bij nieuwe uitslagen sinds de laatste back-up, als er geen match bezig is
+    const blok = document.getElementById('backupBlok');
+    if (!blok) {
+        return;
+    }
+    const nieuwe = info ? Math.max(0, info.uitslagen_nu - info.laatste_aantal) : 0;
+    const bezig = (state.matches || []).some(function(m) { return m.plannerId && m.status === 'bezig' && !m.completed; });
+    const datum = (document.getElementById('dateSelect') || {}).value;
+    const dagMatchen = (state.matches || []).filter(function(m) { return m.plannerId && m.date === datum; });
+    const alleGespeeld = dagMatchen.length > 0 && dagMatchen.every(function(m) { return m.completed || m.status === 'gespeeld'; });
+    const toonKnop = nieuwe > 0 && !bezig;
+    if (state.currentPage !== 1 || (!toonKnop && !melding)) {
+        blok.style.display = 'none';
+        blok.textContent = '';
+        return;
+    }
+    blok.textContent = '';
+    blok.style.borderLeftColor = alleGespeeld && toonKnop ? '#2ecc71' : '#3498db';
+    const titel = document.createElement('div');
+    titel.style.cssText = 'font-weight:bold; font-size:1.2em; margin-bottom:6px;';
+    titel.textContent = toonKnop
+        ? (alleGespeeld ? 'Alle matchen van deze speeldag zijn gespeeld: tijd voor een back-up' : 'Back-up nodig')
+        : 'Back-up';
+    blok.appendChild(titel);
+    if (toonKnop) {
+        const tekst = document.createElement('div');
+        tekst.style.cssText = 'font-size:1.05em; margin-bottom:12px; color:#ecf0f1;';
+        tekst.textContent = backupSamenvatting(info);
+        blok.appendChild(tekst);
+        const knop = document.createElement('button');
+        knop.type = 'button';
+        knop.tabIndex = -1;
+        knop.disabled = backupBezig;
+        knop.textContent = 'Back-up maken en uitslagen downloaden';
+        knop.style.cssText = 'background:#2ecc71; color:white; border:none; padding:12px 26px; border-radius:8px; font-size:1.05em; cursor:pointer;';
+        knop.onclick = function() { maakBackupEnDownload(); };
+        blok.appendChild(knop);
+    }
+    if (melding) {
+        const m = document.createElement('div');
+        m.style.cssText = 'margin-top:12px; font-size:1.05em; color:' + melding.kleur + ';';
+        m.textContent = melding.tekst;
+        blok.appendChild(m);
+    }
+    blok.style.display = 'block';
+};
+
+function fetchMetLimiet(url, opties, ms) {
+    const afbreker = new AbortController();
+    const timer = setTimeout(function() { afbreker.abort(); }, ms);
+    return fetch(url, Object.assign({}, opties, { signal: afbreker.signal })).finally(function() { clearTimeout(timer); });
+}
+
+function bewaarBestandOpPc(blob, naam) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = naam;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 20000);
+}
+
+window.maakBackupEnDownload = async function() {
+    if (backupBezig) {
+        return;
+    }
+    const verbinding = leesVerbinding();
+    if (!verbinding.adres || !verbinding.sleutel) {
+        zetBackupMelding('Back-up mislukt: er is geen verbinding met de planner ingesteld (zie Beheer).', '#e74c3c');
+        return;
+    }
+    backupBezig = true;
+    zetBackupMelding('Back-up wordt gemaakt...', '#bdc3c7');
+    const hoofd = { 'X-API-Key': verbinding.sleutel };
+    try {
+        const r1 = await fetchMetLimiet(verbinding.adres + '/api/backup', { method: 'POST', headers: hoofd }, 60000);
+        let j = {};
+        try { j = await r1.json(); } catch (fout) { /* geen JSON */ }
+        if (!r1.ok || !j.ok) {
+            throw new Error(j.fout || ('de planner antwoordt met fout ' + r1.status));
+        }
+        const r2 = await fetchMetLimiet(verbinding.adres + '/api/backup/' + encodeURIComponent(j.bestand), { headers: hoofd }, 60000);
+        if (!r2.ok) {
+            throw new Error('het bestand kon niet van de planner gehaald worden (fout ' + r2.status + ')');
+        }
+        const blob = await r2.blob();
+        if (blob.size !== j.grootte) {
+            throw new Error('het gedownloade bestand is niet volledig (' + blob.size + ' van ' + j.grootte + ' bytes)');
+        }
+        bewaarBestandOpPc(blob, j.bestand);
+        // Pas als de pc het bestand heeft, telt de back-up als gedaan: de planner moet dat weten
+        let bevestigd = true;
+        try {
+            const r3 = await fetchMetLimiet(verbinding.adres + '/api/backup/' + encodeURIComponent(j.bestand) + '/gedownload',
+                { method: 'POST', headers: hoofd }, 20000);
+            bevestigd = r3.ok;
+        } catch (fout) {
+            bevestigd = false;
+        }
+        backupBezig = false;
+        const samen = j.bestand + ' (' + Math.max(1, Math.round(j.grootte / 1024)) + ' kB, ' + j.aantal_uitslagen + ' uitslagen, controle in orde)';
+        if (bevestigd) {
+            zetBackupMelding('Back-up gemaakt en gedownload: ' + samen + '. Ze staat ook bewaard op de planner.', '#2ecc71');
+        } else {
+            zetBackupMelding('Back-up gedownload: ' + samen + ', maar de planner kon dit niet registreren. Het blok blijft staan tot de volgende back-up.', '#f1c40f', 600000);
+        }
+        vernieuwPlanner(true);
+    } catch (fout) {
+        backupBezig = false;
+        const reden = fout && fout.name === 'AbortError' ? 'de planner antwoordt niet (tijd overschreden)' : (fout && fout.message ? fout.message : 'onbekende fout');
+        zetBackupMelding('Back-up mislukt: ' + reden + '. Probeer het opnieuw.', '#e74c3c', 600000);
+    }
+};
 function clearOldCache() { if (localStorage.getItem('app_version') !== APP_VERSION) { localStorage.setItem('app_version', APP_VERSION); } }
 function getAdminPassword() { return localStorage.getItem('biljartAdminPassword') || null; }
 function setAdminPassword(newPassword) { if (newPassword && newPassword.trim() !== '') { localStorage.setItem('biljartAdminPassword', newPassword.trim()); return true; } return false; }
@@ -2619,7 +2789,8 @@ window.showPage = function(pageNum) {
     }
     if (actualPageNum === 6) { overzichtGetoondOp = Date.now(); }
     if (actualPageNum === 5) { setTimeout(pasKopAan, 0); }
-    if (actualPageNum === 1) { setTimeout(function() { toonHerstelBalk(); if (Date.now() - window.laatsteVerversing > 4000) { vernieuwPlanner(true); } }, 0); }
+    if (actualPageNum === 1) { setTimeout(function() { toonHerstelBalk(); if (Date.now() - window.laatsteVerversing > 4000) { vernieuwPlanner(true); } toonBackupBlok(); }, 0); }
+    if (actualPageNum === 7) { setTimeout(toonBackupBlok, 0); }
     const pageId = `page${actualPageNum}`;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(pageId);
