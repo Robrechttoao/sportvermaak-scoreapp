@@ -1105,7 +1105,7 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 <div class="header">
 <h1>⚪🟡🔴 Biljartclub Sport & Vermaak 2.0</h1>
 <div class="header-buttons">
-<button class="download-btn" onclick="checkAdminPassword()">📤 Beheer Matchen</button>
+<button class="download-btn" onclick="checkAdminPassword()">⚙️ Beheer</button>
 </div>
 </div>
 <div id="herstelBalk" style="display:none; background:#34495e; border-left:6px solid #f1c40f; border-radius:10px; padding:16px 22px; margin:15px auto; max-width:900px; color:#f1c40f;"></div>
@@ -1271,7 +1271,7 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 <button class="home-btn" onclick="showPage(1)">🏠 Hoofdmenu</button>
 <div style="width: 70px;"></div>
 </div>
-<h1>📥 Beheer Matchen</h1>
+<h1>⚙️ Beheer</h1>
 <div style="display: flex; gap: 10px;">
 <button class="download-btn" onclick="changeAdminPassword()" style="background: #9b59b6;">🔐 Wachtwoord</button>
 </div>
@@ -1298,32 +1298,13 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 <button class="download-btn" id="backupBeheerKnop" onclick="maakBackupEnDownload()" style="background: #2ecc71; width: 100%; padding: 15px;">💾 Back-up maken en uitslagen downloaden</button>
 <p id="backupBeheerStatus" style="margin-top: 12px; color: #bdc3c7; font-size: 0.9em;"></p>
 </div>
-<div class="download-section">
-<h3>📥 Download Resultaten</h3>
-<div style="margin: 20px 0;">
-<button class="download-btn" onclick="downloadAllResults()" style="width: 100%; padding: 15px; margin-bottom: 10px;">📥 Download Voltooide Matchen</button>
-<p style="margin-top: 10px; color: #bdc3c7; font-size: 0.9em;">Download voltooide matchen naar CSV. Matchen worden naar "Gedownloade Matchen" verplaatst.</p>
-</div>
-<div style="margin: 20px 0;">
-<label for="filterDate" style="display: block; margin-bottom: 10px; font-weight: bold;">Filter op datum:</label>
-<input type="date" id="filterDate" class="date-input" style="margin-bottom: 15px;">
-<button class="download-btn" onclick="downloadFilteredResults()" style="width: 100%; padding: 15px;">📥 Download Gefilterde Resultaten</button>
-<p style="margin-top: 10px; color: #bdc3c7; font-size: 0.9em;">Download voltooide matchen voor een specifieke datum.</p>
-</div>
-</div>
 <div class="matches-tabs" id="matchesTabs">
 <button class="tab-btn active" onclick="showMatchesTab('active')" id="tabActive">Actieve Matchen<span class="badge" id="badgeActive">0</span></button>
 <button class="tab-btn" onclick="showMatchesTab('completed')" id="tabCompleted">Voltooide Matchen<span class="badge" id="badgeCompleted">0</span></button>
-<button class="tab-btn" onclick="showMatchesTab('downloaded')" id="tabDownloaded">Gedownloade Matchen<span class="badge" id="badgeDownloaded">0</span></button>
-<button class="tab-btn" onclick="showMatchesTab('players')" id="tabPlayers">👥 Spelers Beheer<span class="badge" id="badgePlayers">0</span></button>
-<button class="tab-btn speeldagen" onclick="showMatchesTab('speeldagen')" id="tabSpeeldagen">📅 Speeldagen Beheer<span class="badge" id="badgeSpeeldagen">0</span></button>
 </div>
 <div id="matchesTabContent">
 <div class="tab-content active" id="tabContentActive"></div>
 <div class="tab-content" id="tabContentCompleted"></div>
-<div class="tab-content" id="tabContentDownloaded"></div>
-<div class="tab-content" id="tabContentPlayers"><div class="players-management-container"></div></div>
-<div class="tab-content" id="tabContentSpeeldagen"><div class="speeldagen-management-container"></div></div>
 <div class="tab-content" id="tabContentArchive"><div class="archive-container"></div></div>
 </div>
 </div>
@@ -1355,7 +1336,7 @@ body { background: #2c3e50; color: black; position: fixed; width: 100%; height: 
 </div>
 
 <script>
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 function updateHeaderTargets() {
     const t1 = document.getElementById('headerTarget1');
     const t2 = document.getElementById('headerTarget2');
@@ -1559,8 +1540,6 @@ selectedWhitePlayer: null, newMatch: { player1: null, player2: null, target1: 0,
 currentMatchesTab: 'active', firstToTarget: null, isNabeurt: false, spelerExtraInfo: [], speeldagen: [], seizoenen: [], actiefSeizoenId: null
 };
 window.lastStateBeforeAdd = null;
-window.editingPlayerIndex = -1;
-window.editingPlayerData = null;
 // ==================== PLANNER-KOPPELING ====================
 const LOKAAL_ID_VANAF = 1000000;
 
@@ -1802,7 +1781,7 @@ function toonPlannerStatus(tekst, kleur) {
         const verbinding = leesVerbinding();
         const laatste = formatSyncTijd(localStorage.getItem('plannerLaatsteSync'));
         if (!verbinding.adres || !verbinding.sleutel) {
-            tekst = 'Planner niet ingesteld (Beheer Matchen > Verbinding)';
+            tekst = 'Planner niet ingesteld (Beheer > Verbinding)';
             kleur = '#f1c40f';
         } else if (laatste) {
             tekst = 'Planner laatst bijgewerkt: ' + laatste;
@@ -1858,11 +1837,11 @@ window.vernieuwPlanner = async function(stil) {
         toonHerstelBalk();
         toonBackupBlok();
     } else if (r.reden === 'niet_ingesteld') {
-        toonPlannerStatus('Planner niet ingesteld. Ga naar Beheer Matchen en vul de verbinding in.', '#f1c40f');
+        toonPlannerStatus('Planner niet ingesteld. Ga naar Beheer en vul de verbinding in.', '#f1c40f');
     } else if (r.reden === 'match_bezig') {
         toonPlannerStatus('Er loopt een match. Vernieuwen kan pas na afloop.', '#f1c40f');
     } else if (r.reden === 'sleutel') {
-        toonPlannerStatus('De sleutel klopt niet. Controleer de verbinding in Beheer Matchen.' + oud, '#e74c3c');
+        toonPlannerStatus('De sleutel klopt niet. Controleer de verbinding in Beheer.' + oud, '#e74c3c');
     } else if (r.reden === 'geen_verbinding') {
         toonPlannerStatus('Geen verbinding met de planner.' + oud, '#e74c3c');
     } else {
@@ -2727,7 +2706,6 @@ if(setAdminPassword(n1)) alert("✅ Wachtwoord succesvol gewijzigd!");
 }
 function formatDateForInput(date) { const d = new Date(date); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function formatDateDisplay(dateStr) { if(!dateStr) return ''; const p=dateStr.split('-'); return p.length===3 ? `${p[2]}/${p[1]}/${p[0]}` : dateStr; }
-function formatDateForCSV(dateStr) { return formatDateDisplay(dateStr); }
 function formatDateFull(dateStr) { if(!dateStr) return ''; const d=new Date(dateStr); if(isNaN(d.getTime())) return dateStr; const dagen=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag']; const maanden=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december']; return `${dagen[d.getDay()]} ${d.getDate()} ${maanden[d.getMonth()]} ${d.getFullYear()}`; }
 function enableScoreButtons() { document.querySelectorAll('.score-btn').forEach(btn=>{btn.disabled=false;btn.style.opacity='1';btn.style.cursor='pointer';}); const c=document.getElementById('confirmScoreBtn'); if(c){c.disabled=false;c.style.opacity='1';c.style.cursor='pointer';} }
 function disableScoreButtons() { document.querySelectorAll('.score-btn').forEach(btn=>{btn.disabled=true;btn.style.opacity='0.5';btn.style.cursor='not-allowed';}); const c=document.getElementById('confirmScoreBtn'); if(c){c.disabled=true;c.style.opacity='0.5';c.style.cursor='not-allowed';} }
@@ -2896,7 +2874,7 @@ function setupNewMatchPage() {
 }
 function displayAvailablePlayers() {
     const c=document.getElementById('availablePlayers');
-    if(!state.players.length) { c.innerHTML=`<div style="text-align:center;padding:20px;color:#95a5a6;"><p>Geen spelers gevonden</p><p><small>Voeg spelers toe via Beheer Matchen → Spelers Beheer</small></p></div>`; return; }
+    if(!state.players.length) { c.innerHTML=`<div style="text-align:center;padding:20px;color:#95a5a6;"><p>Geen spelers gevonden</p><p><small>De spelers beheer je in de planner</small></p></div>`; return; }
     state.players.sort((a,b)=>a.name.localeCompare(b.name));
     let h='<h3 style="margin-bottom:15px;color:#ecf0f1;">Beschikbare spelers:</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">';
     state.players.forEach((p,i)=>{
@@ -3158,155 +3136,15 @@ function updateScoringPage() {
     const ub = document.getElementById('undoBtn'); 
     if (ub) ub.disabled = !lastStateBeforeAdd;
 }
-function fixEncoding(text) { if(!text)return ''; const r={'Ã©':'é','Ã¨':'è','Ãª':'ê','Ã«':'ë','Ã':'à','Ã¢':'â','Ã¤':'ä','Ã¥':'å','Ãç':'ç','Ã¯':'ï','Ã®':'î','Ã´':'ô','Ã¶':'ö','Ã¹':'ù','Ã»':'û','Ã¼':'ü','Ã±':'ñ','â‚¬':'€','Ã  ':'Â'}; let f=text.toString(); Object.keys(r).forEach(b=>{const re=new RegExp(b,'g');f=f.replace(re,r[b]);}); return f; }
-function parseSpeeldagenCSVMetKopteksten(csvText) { const l=csvText.split(/\r\n|\n/); const s=[]; for(let i=1;i<l.length;i++){const line=l[i].trim();if(!line)continue;const p=line.split(';');if(p.length>=2&&p[0]&&p[1]&&!isNaN(parseInt(p[1]))){const d=new Date((parseInt(p[1])>=60?-2:-1)*24*60*60*1000+new Date(1900,0,1).getTime());s.push({volgnummer:parseInt(p[0]),excelDatum:parseInt(p[1]),jsDatum:d,displayDatum:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,fullDate:`${['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'][d.getDay()]} ${d.getDate()} ${['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'][d.getMonth()]} ${d.getFullYear()}`});}} s.sort((a,b)=>a.volgnummer-b.volgnummer); return s; }
-window.showMatchesTab=function(tab){state.currentMatchesTab=tab;document.querySelectorAll('#matchesTabs .tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('#matchesTabContent .tab-content').forEach(c=>c.classList.remove('active'));document.getElementById(`tab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.add('active');document.getElementById(`tabContent${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.add('active');if(tab==='players')loadPlayersManagementTab();else if(tab==='speeldagen')loadSpeeldagenManagementTab();else if(tab==='archive')loadArchiveTab();else loadMatchesTabContent();}
-function loadPlayersManagementTab(){
-    const container = document.getElementById('tabContentPlayers');
-    updatePlayersBadge();
-    const tp = state.players.length;
-    const at = tp ? ((state.players.reduce((s,p)=>s+(parseFloat(p.tsg.replace(',','.'))||0),0)/tp).toFixed(3)) : '0.000';
-    const av = tp ? Math.round(state.players.reduce((s,p)=>s+(p.target||0),0)/tp) : 0;
-    const isEditing = editingPlayerIndex >= 0;
-    const editTitle = isEditing ? '📝 Speler Bewerken' : '➕ Nieuwe Speler Toevoegen';
-    const editBtnText = isEditing ? '💾 Opslaan' : '➕ Toevoegen';
-    const editBtnAction = isEditing ? 'saveEditedPlayer()' : 'addNewPlayer()';
-    const cancelBtn = isEditing ? '<button class="cancel-btn" onclick="cancelEditPlayer()" style="margin-top:10px;">❌ Annuleren</button>' : '';
-    const editName = editingPlayerData ? editingPlayerData.name : '';
-    const editTsg = editingPlayerData ? editingPlayerData.tsg : '';
-    const editTarget = editingPlayerData ? editingPlayerData.target : '';
-    const speeldagenHtml = (state.speeldagen && state.speeldagen.length > 0) ? `<div style="background:#2c3e50;padding:15px;border-radius:8px;margin-top:30px;"><h4>📅 Geïmporteerde Speeldagen (${state.speeldagen.length})</h4></div>` : '';
-    const emptyMsg = tp > 0 ? '' : '<div class="empty-players-message">Geen spelers gevonden.</div>';
-    container.innerHTML = `
-    <div class="players-management-container">
-        <div style="background:#2c3e50;border-left:4px solid #9b59b6;padding:15px;margin-bottom:20px;border-radius:8px;">
-            <h4>💾 Back-up</h4>
-            <p style="color:#bdc3c7;font-size:0.9em;margin:5px 0;">Bewaar spelers, matchen en speeldagen in één bestand, bijvoorbeeld op een USB-stick of in OneDrive.</p>
-            <div style="display:flex;gap:10px;margin-top:10px;">
-                <button onclick="exportAllData()" style="background:#9b59b6;color:white;border:none;padding:8px 15px;border-radius:5px;cursor:pointer;">📤 Back-up maken</button>
-                <button onclick="importAllData()" style="background:#e67e22;color:white;border:none;padding:8px 15px;border-radius:5px;cursor:pointer;">📥 Back-up terugzetten</button>
-            </div>
-        </div>
-        <div class="player-form-container">
-            <h3>${editTitle}</h3>
-            <div class="form-row">
-                <div class="form-group"><label>Naam *</label><input type="text" id="playerNameInput" class="form-input" placeholder="Voor- en achternaam" value="${editName}"></div>
-                <div class="form-group"><label>Gemiddelde (TSG)</label><input type="text" id="playerTsgInput" class="form-input" placeholder="bijv. 4,864" value="${editTsg}"></div>
-                <div class="form-group"><label>Target</label><input type="number" id="playerTargetInput" class="form-input" placeholder="bijv. 87" min="1" max="200" value="${editTarget}"></div>
-                <button class="add-player-btn" onclick="${editBtnAction}">${editBtnText}</button>
-            </div>
-            ${cancelBtn}
-        </div>
-        <div style="background:#34495e;border-radius:10px;padding:20px;margin:20px 0;border-left:4px solid #2ecc71;">
-            <h4 style="margin-bottom:15px;color:#2ecc71;">📁 Import/Export</h4>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px;">
-                <button onclick="importPlayersFromCSV()" style="background:#2ecc71;color:white;padding:12px;border-radius:6px;border:none;cursor:pointer;font-size:14px;">👥 Importeer Spelers CSV</button>
-            </div>
-        </div>
-        <div class="stats-summary">
-            <div class="stats-item"><div>Totaal spelers</div><div class="stats-value">${tp}</div></div>
-            <div class="stats-item"><div>Gemiddeld TSG</div><div class="stats-value">${at.replace('.',',')}</div></div>
-            <div class="stats-item"><div>Gemiddeld target</div><div class="stats-value">${av}</div></div>
-        </div>
-        <div class="players-list-container">
-            <h3 style="margin-bottom:20px;">📋 Alle Spelers (${tp})</h3>
-            <div style="margin-bottom:20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-                <div style="flex-grow:1;"><input type="text" id="playerSearchInput" class="search-input" placeholder="Zoek speler..." onkeyup="filterPlayersList()"></div>
-                <button class="bulk-action-btn" onclick="clearAllPlayers()" style="background:#e74c3c;">🗑️ Alle Verwijderen</button>
-            </div>
-            <div class="players-list-header"><div>Naam</div><div>TSG</div><div>Target</div><div>Acties</div></div>
-            <div id="playersListContent">${emptyMsg}</div>
-        </div>
-        ${speeldagenHtml}
-    </div>`;
-    if (tp > 0) renderPlayersList();
-}
-function renderPlayersList(){const c=document.getElementById('playersListContent');if(!c)return;const st=document.getElementById('playerSearchInput')?.value.toLowerCase()||'';const fp=state.players.filter(p=>(p.name||'').toLowerCase().includes(st)||(p.tsg||'').toLowerCase().includes(st)||(p.target||'').toString().includes(st));if(!fp.length){c.innerHTML=`<div class="empty-players-message">${st?`Geen resultaten voor "${st}"`:'Geen spelers gevonden'}</div>`;return;}c.innerHTML=fp.map((p,i)=>{const ed=editingPlayerIndex===i;return `<div class="player-row ${ed?'editing':''}"><div>${ed?`<input type="text" class="editable-input" id="editName_${i}" value="${p.name}">`:`<strong>${p.name}</strong>`}</div><div>${ed?`<input type="text" class="editable-input" id="editTsg_${i}" value="${p.tsg}">`:(p.tsg||'0,000')}</div><div>${ed?`<input type="number" class="editable-input" id="editTarget_${i}" value="${p.target}" min="1" max="200">`:(p.target||'0')}</div><div class="player-actions">${ed?`<button class="save-btn" onclick="savePlayerEdit(${i})">💾 Opslaan</button><button class="cancel-btn" onclick="cancelEditPlayer()">❌ Annuleren</button>`:`<button class="edit-btn" onclick="editPlayer(${i})">✏️ Bewerk</button><button class="delete-btn" onclick="deletePlayer(${i})">🗑️ Verwijder</button>`}</div></div>`;}).join('');}
-window.filterPlayersList=function(){renderPlayersList();}
-window.addNewPlayer=function(){const n=document.getElementById('playerNameInput').value.trim(),t=document.getElementById('playerTsgInput').value.trim()||'0,000',g=parseInt(document.getElementById('playerTargetInput').value)||0;if(!n)return alert('Voer een naam in');if(state.players.some(p=>p.name.toLowerCase()===n.toLowerCase())&&!confirm(`"${n}" bestaat al. Toch toevoegen?`))return;state.players.push({name:n,tsg:(parseFloat(t.replace(',','.'))||0).toFixed(3).replace('.',','),target:Math.max(1,Math.min(200,g||50))});savePlayersToStorage();document.getElementById('playerNameInput').value='';document.getElementById('playerTsgInput').value='';document.getElementById('playerTargetInput').value='';renderPlayersList();updatePlayersBadge();alert(`✅ "${n}" toegevoegd!`);}
-window.editPlayer=function(i){if(i<0||i>=state.players.length)return;editingPlayerIndex=i;editingPlayerData={...state.players[i]};loadPlayersManagementTab();}
-window.saveEditedPlayer=function(){if(editingPlayerIndex<0)return;const n=document.getElementById('playerNameInput').value.trim(),t=document.getElementById('playerTsgInput').value.trim()||'0,000',g=parseInt(document.getElementById('playerTargetInput').value)||0;if(!n)return alert('Voer een naam in');if(state.players.some((p,idx)=>idx!==editingPlayerIndex&&p.name.toLowerCase()===n.toLowerCase()))return alert('Naam bestaat al.');state.players[editingPlayerIndex]={name:n,tsg:(parseFloat(t.replace(',','.'))||0).toFixed(3).replace('.',','),target:Math.max(1,Math.min(200,g||50))};savePlayersToStorage();editingPlayerIndex=-1;editingPlayerData=null;loadPlayersManagementTab();alert('✅ Bijgewerkt!');}
-window.savePlayerEdit=function(i){if(i<0||i>=state.players.length)return;const n=document.getElementById(`editName_${i}`).value.trim(),t=document.getElementById(`editTsg_${i}`).value.trim()||'0,000',g=parseInt(document.getElementById(`editTarget_${i}`).value)||0;if(!n)return alert('Voer een naam in');if(state.players.some((p,idx)=>idx!==i&&p.name.toLowerCase()===n.toLowerCase()))return alert('Naam bestaat al.');state.players[i]={name:n,tsg:(parseFloat(t.replace(',','.'))||0).toFixed(3).replace('.',','),target:Math.max(1,Math.min(200,g||50))};savePlayersToStorage();editingPlayerIndex=-1;editingPlayerData=null;renderPlayersList();alert('✅ Bijgewerkt!');}
-window.cancelEditPlayer=function(){editingPlayerIndex=-1;editingPlayerData=null;loadPlayersManagementTab();}
-window.deletePlayer=function(i){if(i<0||i>=state.players.length)return;const p=state.players[i];if(!confirm(`"${p.name}" verwijderen?`))return;if(state.matches.some(m=>!m.completed&&(m.p1===p.name||m.p2===p.name)))return alert('⚠️ Speler speelt in actieve match!');state.players.splice(i,1);savePlayersToStorage();if(state.currentMatchesTab==='players'){renderPlayersList();updatePlayersBadge();}alert(`✅ "${p.name}" verwijderd!`);}
-function updatePlayersBadge(){const b=document.getElementById('badgePlayers');if(b)b.textContent=state.players.length;}
-window.importPlayersFromCSV=function(){const f=document.createElement('input');f.type='file';f.accept='.csv';f.onchange=function(e){const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=function(ev){try{const csv=ev.target.result,l=csv.split(/\r\n|\n/),ns=[];for(let i=1;i<l.length;i++){const line=l[i].trim();if(!line)continue;const p=line.split(';');if(p.length>=4&&p[1]){const nm=fixEncoding(p[1]);if(!nm)continue;ns.push({name:nm,naam:nm,tsg:p[3]||'0,000',target:parseInt(p[2])||50});}}if(!ns.length)return alert("Geen spelers gevonden!");let v="Te importeren:\n";ns.slice(0,3).forEach((s,i)=>v+=`${i+1}. ${s.name} (T:${s.target})\n`);if(ns.length>3)v+=`... en ${ns.length-3} meer\n`;if(!confirm(`${ns.length} spelers gevonden.\n${v}\nDoorgaan?`))return;const cur=state.players||[];let bij=0,toe=0;ns.forEach(n=>{const idx=cur.findIndex(p=>p.name.toLowerCase()===n.name.toLowerCase());if(idx>=0){cur[idx].tsg=n.tsg;cur[idx].target=n.target;bij++;}else{cur.push(n);toe++;}});state.players=cur;savePlayersToStorage();if(state.currentMatchesTab==='players')loadPlayersManagementTab();alert(`✅ Import klaar! Bijgewerkt: ${bij}, Toegevoegd: ${toe}`);}catch(err){alert('❌ Importfout: '+err.message);}};r.readAsText(file,'UTF-8');};f.click();}
-window.importSpeeldagenCSV=function(){}
-function parseSpeeldagenCSVMetKopteksten(csvText){const l=csvText.split(/\r\n|\n/),s=[];for(let i=1;i<l.length;i++){const line=l[i].trim();if(!line)continue;const p=line.split(';');if(p.length>=2&&!isNaN(parseInt(p[0]))&&!isNaN(parseInt(p[1]))){const d=new Date((parseInt(p[1])>=60?-2:-1)*24*60*60*1000+new Date(1900,0,1).getTime());s.push({volgnummer:parseInt(p[0]),excelDatum:parseInt(p[1]),jsDatum:d,displayDatum:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,fullDate:`${['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'][d.getDay()]} ${d.getDate()} ${['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'][d.getMonth()]} ${d.getFullYear()}`});}}s.sort((a,b)=>a.volgnummer-b.volgnummer);return s;}
-function savePlayersToStorage(){ saveStateToStorage(); }
-window.clearAllPlayers=function(){if(confirm("ALLE spelers verwijderen?")){state.players=[];savePlayersToStorage();loadPlayersManagementTab();}}
-window.loadSpeeldagenManagementTab=function(){
-    const c=document.getElementById('tabContentSpeeldagen');
-    updateSpeeldagenBadge();
-    const actief=state.seizoenen.find(s=>s.id===state.actiefSeizoenId);
-    const tp=state.speeldagen.filter(s=>s.seizoenId===state.actiefSeizoenId).length;
-    const seizoenLijst=state.seizoenen.length?state.seizoenen.map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(255,255,255,0.05);border-radius:6px;margin-top:8px;"><span style="color:#ecf0f1;font-weight:bold;">${s.naam}${s.id===state.actiefSeizoenId?' ✅ actief':''}</span>${s.id===state.actiefSeizoenId?'':`<button onclick="setActiefSeizoen('${s.id}')" style="background:#3498db;color:white;border:none;padding:8px 15px;border-radius:5px;cursor:pointer;">Maak actief</button>`}</div>`).join(''):'<p style="color:#bdc3c7;font-size:0.9em;margin-top:8px;">Nog geen seizoen. Maak er hieronder een aan.</p>';
-    const dagenDeel=actief?`<div style="background:#2c3e50;border-left:4px solid #e67e22;padding:15px;margin-bottom:20px;border-radius:8px;"><h4>📅 Speeldag toevoegen aan ${actief.naam}</h4><div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap;"><input type="date" id="newSpeeldagDate" class="form-input"><button onclick="addNewSpeeldag()" style="background:#e67e22;color:white;border:none;padding:12px 20px;border-radius:6px;cursor:pointer;font-weight:bold;">➕ Toevoegen</button></div></div><div class="stats-summary"><div class="stats-item"><div>Speeldagen in dit seizoen</div><div class="stats-value">${tp}</div></div></div><div class="speeldagen-list-container"><h3 style="margin-bottom:20px;">📋 Speeldagen ${actief.naam} (${tp})</h3><div class="speeldagen-list-header"><div>Volgnr</div><div>Datum</div><div>Excel Datum</div><div>Acties</div></div><div id="speeldagenListContent">${tp?'':'<div class="empty-speeldagen-message">Geen speeldagen</div>'}</div></div>`:'<div class="empty-speeldagen-message">Maak eerst een seizoen aan.</div>';
-    c.innerHTML=`<div class="speeldagen-management-container"><div style="background:#2c3e50;border-left:4px solid #9b59b6;padding:15px;margin-bottom:20px;border-radius:8px;"><h4>🗓️ Seizoenen</h4>${seizoenLijst}<div style="display:flex;gap:10px;align-items:center;margin-top:15px;flex-wrap:wrap;"><input type="text" id="newSeizoenNaam" class="form-input" placeholder="bijv. 2025-2026"><button onclick="addSeizoen()" style="background:#9b59b6;color:white;border:none;padding:12px 20px;border-radius:6px;cursor:pointer;font-weight:bold;">➕ Seizoen aanmaken</button></div></div>${dagenDeel}</div>`;
-    if(tp>0)renderSpeeldagenList();
-};
-function renderSpeeldagenList(){const c=document.getElementById('speeldagenListContent');if(!c)return;c.innerHTML=state.speeldagen.map((s,i)=>({s,i})).filter(x=>x.s.seizoenId===state.actiefSeizoenId).map(x=>`<div class="speeldag-row"><div><span class="speeldag-volgnummer">${x.s.volgnummer}</span></div><div><div class="date-full-format">${x.s.fullDate}</div></div><div>${x.s.excelDatum||'-'}</div><div class="speeldag-actions"><button class="delete-btn" onclick="deleteSpeeldag(${x.i})">🗑️ Verwijder</button></div></div>`).join('');}
-window.addSeizoen=function(){
-    const inp=document.getElementById('newSeizoenNaam');
-    const naam=inp?inp.value.trim():'';
-    if(!naam){alert('Geef het seizoen een naam, bijvoorbeeld 2025-2026.');return;}
-    if(state.seizoenen.some(s=>s.naam.toLowerCase()===naam.toLowerCase())){alert('Dit seizoen bestaat al.');return;}
-    const s={id:'s'+Date.now(),naam:naam};
-    state.seizoenen.push(s);
-    if(!state.actiefSeizoenId) state.actiefSeizoenId=s.id;
-    saveStateToStorage();
-    loadSpeeldagenManagementTab();
-};
-window.setActiefSeizoen=function(id){
-    state.actiefSeizoenId=id;
-    saveStateToStorage();
-    loadSpeeldagenManagementTab();
-};
-window.addNewSpeeldag=function(){
-    const sid=state.actiefSeizoenId;
-    if(!sid){alert('Maak eerst een seizoen aan en kies het als actief.');return;}
-    const inp=document.getElementById('newSpeeldagDate');
-    const val=inp?inp.value:'';
-    if(!val){alert('Kies eerst een datum.');return;}
-    if(state.speeldagen.some(s=>s.displayDatum===val)){alert('Deze speeldag bestaat al.');return;}
-    const p=val.split('-');
-    const d=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]),12,0,0);
-    state.speeldagen.push({seizoenId:sid,volgnummer:0,excelDatum:'',jsDatum:d.toISOString(),displayDatum:val,fullDate:formatDateFull(val)});
-    state.speeldagen.sort((a,b)=>a.displayDatum.localeCompare(b.displayDatum));
-    let n=0;
-    state.speeldagen.filter(s=>s.seizoenId===sid).forEach(s=>{n++;s.volgnummer=n;});
-    saveStateToStorage();
-    loadSpeeldagenManagementTab();
-    updateSpeeldagenBadge();
-}
-window.deleteSpeeldag=function(i){
-    if(i<0||i>=state.speeldagen.length)return;
-    const dag=state.speeldagen[i];
-    if(!confirm(`Speeldag ${dag.volgnummer} (${dag.fullDate}) verwijderen?`))return;
-    const sid=dag.seizoenId;
-    state.speeldagen.splice(i,1);
-    let n=0;
-    state.speeldagen.filter(s=>s.seizoenId===sid).forEach(s=>{n++;s.volgnummer=n;});
-    saveStateToStorage();
-    loadSpeeldagenManagementTab();
-    updateSpeeldagenBadge();
-}
-window.clearAllSpeeldagen=function(){if(confirm("ALLE speeldagen verwijderen?")){state.speeldagen=[];saveStateToStorage();loadSpeeldagenManagementTab();}}
-function updateSpeeldagenBadge(){const b=document.getElementById('badgeSpeeldagen');if(b)b.textContent=state.speeldagen.length;}
-function loadMatchesTabContent(){updateTabBadges();if(state.currentMatchesTab==='active')loadActiveMatches();else if(state.currentMatchesTab==='completed')loadCompletedMatches();else if(state.currentMatchesTab==='downloaded')loadDownloadedMatches();else if(state.currentMatchesTab==='players')loadPlayersManagementTab();else if(state.currentMatchesTab==='speeldagen')loadSpeeldagenManagementTab();}
-function updateTabBadges(){document.getElementById('badgeActive').textContent=state.matches.filter(m=>!m.completed).length;document.getElementById('badgeCompleted').textContent=state.matches.filter(m=>m.completed).length;document.getElementById('badgeDownloaded').textContent=state.downloadedMatches.length;document.getElementById('badgePlayers').textContent=state.players.length;document.getElementById('badgeSpeeldagen').textContent=state.speeldagen.length;}
-function loadActiveMatches(){const c=document.getElementById('tabContentActive'),am=state.matches.filter(m=>!m.completed);if(!am.length){c.innerHTML='<div class="no-matches">Geen actieve matchen</div>';return;}let h='<div class="matches-list-title">Actieve Matchen ('+am.length+')</div><button class="clear-all-btn" onclick="clearAllActiveMatches()">🗑️ Alle Verwijderen</button><div style="margin-bottom:20px;"></div>';am.forEach(m=>{h+=`<div class="match-card" style="cursor:default;"><button class="delete-match-btn" onclick="deleteMatch(${m.id})">×</button><h3>${m.p1} ⚔️ ${m.p2}<span class="status-badge status-pending">In afwachting</span></h3><p class="match-info">Punten: ${m.target1}-${m.target2}</p><div class="match-actions"><button onclick="selectMatch(${m.id})" class="action-btn-small" style="background:#2ecc71;">▶️ Speel</button></div></div>`;});c.innerHTML=h;}
-function loadCompletedMatches(){const c=document.getElementById('tabContentCompleted'),cm=state.matches.filter(m=>m.completed);if(!cm.length){c.innerHTML='<div class="no-matches">Geen voltooide matchen</div>';return;}let h='<div class="matches-list-title">Voltooide Matchen ('+cm.length+')</div><button class="download-btn" onclick="downloadAllResults()">📥 Download Alles</button>';cm.forEach(m=>{h+=`<div class="match-card completed"><button class="delete-match-btn" onclick="deleteMatch(${m.id})">×</button><h3>${m.p1} ⚔️ ${m.p2}<span class="status-badge status-completed">Voltooid</span></h3><p class="match-info">Score: ${m.p1Score||0}-${m.p2Score||0} | Winnaar: ${m.winner||'?'}</p><div class="match-actions"><button onclick="downloadSingleMatch(${m.id})" class="action-btn-small" style="background:#2ecc71;">📥 Download</button></div></div>`;});c.innerHTML=h;}
-function loadDownloadedMatches(){const c=document.getElementById('tabContentDownloaded'),dm=state.downloadedMatches;if(!dm.length){c.innerHTML='<div class="no-matches">Geen gedownloade matchen</div>';return;}let h='<div class="matches-list-title">Gedownloade Matchen ('+dm.length+')</div>';dm.forEach((m,i)=>{h+=`<div class="match-card downloaded"><button class="delete-match-btn" onclick="deleteDownloadedMatch(${i})">×</button><h3>${m.p1} ⚔️ ${m.p2}<span class="status-badge status-downloaded">Gedownload</span></h3></div>`;});c.innerHTML=h;}
-window.deleteMatch=function(id){const i=state.matches.findIndex(m=>m.id===id);if(i!==-1&&confirm(`Match verwijderen?`)){state.matches.splice(i,1);saveStateToStorage();loadMatchesTabContent();}}
-window.deleteDownloadedMatch=function(i){if(i>=0&&i<state.downloadedMatches.length&&confirm(`Verwijderen?`)){state.downloadedMatches.splice(i,1);saveStateToStorage();loadMatchesTabContent();}}
-window.clearAllActiveMatches=function(){if(!state.matches.some(m=>!m.completed))return;if(confirm("ALLE actieve matchen verwijderen?")){state.matches=state.matches.filter(m=>m.completed);saveStateToStorage();loadMatchesTabContent();}}
-window.clearAllCompletedMatches=function(){if(!state.matches.some(m=>m.completed))return;if(confirm("ALLE voltooide matchen verwijderen?")){state.matches=state.matches.filter(m=>!m.completed);saveStateToStorage();loadMatchesTabContent();}}
-window.clearAllDownloadedMatches=function(){if(!state.downloadedMatches.length)return;if(confirm("ALLE gedownloade matchen verwijderen?")){state.downloadedMatches=[];saveStateToStorage();loadMatchesTabContent();}}
-window.downloadAllResults=function(){const cm=state.matches.filter(m=>m.completed);if(!cm.length)return alert("Geen matchen");if(confirm(`${cm.length} matchen downloaden?`)){downloadMatchesAsCSV(cm,'voltooide_resultaten');cm.forEach(m=>state.downloadedMatches.push({...m,downloadedDate:new Date().toISOString()}));state.matches=state.matches.filter(m=>!m.completed);saveStateToStorage();loadMatchesTabContent();alert('✅ Gedownload');}}
-window.downloadSingleMatch=function(id){const i=state.matches.findIndex(m=>m.id===id);if(i!==-1&&state.matches[i].completed&&confirm(`Downloaden?`)){downloadMatchesAsCSV([state.matches[i]],`match_${state.matches[i].p1}_${state.matches[i].p2}`);state.downloadedMatches.push({...state.matches[i],downloadedDate:new Date().toISOString()});state.matches.splice(i,1);saveStateToStorage();loadMatchesTabContent();}}
-window.downloadFilteredResults=function(){const fd=document.getElementById('filterDate').value, fm=state.matches.filter(m=>m.completed&&(!fd||m.date===fd));if(!fm.length)return alert("Geen matchen");if(confirm(`${fm.length} matchen downloaden?`)){downloadMatchesAsCSV(fm,`resultaten_${fd||'alle'}`);fm.forEach(m=>state.downloadedMatches.push({...m,downloadedDate:new Date().toISOString()}));state.matches=state.matches.filter(m=>!(m.completed&&(!fd||m.date===fd)));saveStateToStorage();loadMatchesTabContent();alert('✅ Gedownload');}}
-function downloadMatchesAsCSV(matches,filename){let c="\uFEFFDatum;Match ID;Speler 1;Speler 2;Doel 1;Doel 2;Score 1;Score 2;Winnende Speler;Wit Speler;Hoogste Reeks 1;Hoogste Reeks 2;Gemiddelde 1;Gemiddelde 2;Beurten 1;Beurten 2;Regel\n";matches.forEach(m=>{const p1=m.originalP1||m.p1,p2=m.originalP2||m.p2,t1=m.originalTarget1||m.target1,t2=m.originalTarget2||m.target2;let s1,s2,tn1,tn2,h1,h2;const w1=m.whitePlayer===1;s1=w1?m.p1Score||0:m.p2Score||0;s2=w1?m.p2Score||0:m.p1Score||0;tn1=w1?(m.p1Turns?.length||0):(m.p2Turns?.length||0);tn2=w1?(m.p2Turns?.length||0):(m.p1Turns?.length||0);h1=w1?(m.p1Highest||0):(m.p2Highest||0);h2=w1?(m.p2Highest||0):(m.p1Highest||0);const a1=tn1?(s1/tn1).toFixed(2).replace('.',','):"0,00",a2=tn2?(s2/tn2).toFixed(2).replace('.',','):"0,00";const win=m.winner||((s1>=t1&&s2>=t2)?'Gelijkspel':(s1>=t1?p1:p2));c+=`${formatDateForCSV(m.date)};${m.id};${p1};${p2};${t1};${t2};${s1};${s2};${win};${w1?p1:p2};${h1};${h2};${a1};${a2};${tn1};${tn2};${win==='Gelijkspel'?'Gelijkspel - beide spelers target gehaald':(win===p1?'Speler 1 won':'Speler 2 won')}\n`;});const b=new Blob([c],{type:'text/csv;charset=utf-8;'}),u=URL.createObjectURL(b),l=document.createElement("a");l.href=u;l.download=`biljart_${filename}_${new Date().toISOString().split('T')[0]}.csv`;document.body.appendChild(l);l.click();document.body.removeChild(l);}
+window.showMatchesTab=function(tab){state.currentMatchesTab=tab;document.querySelectorAll('#matchesTabs .tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('#matchesTabContent .tab-content').forEach(c=>c.classList.remove('active'));document.getElementById(`tab${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.add('active');document.getElementById(`tabContent${tab.charAt(0).toUpperCase()+tab.slice(1)}`).classList.add('active');loadMatchesTabContent();}
+function loadMatchesTabContent(){updateTabBadges();if(state.currentMatchesTab==='completed')loadCompletedMatches();else loadActiveMatches();}
+function updateTabBadges(){const a=document.getElementById('badgeActive'),c=document.getElementById('badgeCompleted');if(a)a.textContent=state.matches.filter(m=>!m.completed).length;if(c)c.textContent=state.matches.filter(m=>m.completed).length;}
+// De matchen komen uit de planner en worden daar beheerd. Alleen een eigen match (zonder planner) kun je hier nog verwijderen.
+function loadActiveMatches(){const c=document.getElementById('tabContentActive'),am=state.matches.filter(m=>!m.completed);if(!am.length){c.innerHTML='<div class="no-matches">Geen actieve matchen</div>';return;}let h='<div class="matches-list-title">Actieve Matchen ('+am.length+')</div><p style="margin:0 0 15px 0;color:#bdc3c7;font-size:0.9em;">De matchen komen uit de planner. Wijzigen of verwijderen doe je daar.</p>';am.forEach(m=>{const eigen=!m.plannerId;h+=`<div class="match-card" style="cursor:default;">${eigen?`<button class="delete-match-btn" onclick="deleteMatch(${m.id})">×</button>`:''}<h3>${m.p1} ⚔️ ${m.p2}<span class="status-badge status-pending">${eigen?'Eigen match':'In afwachting'}</span></h3><p class="match-info">Punten: ${m.target1}-${m.target2}</p><div class="match-actions"><button onclick="selectMatch(${m.id})" class="action-btn-small" style="background:#2ecc71;">▶️ Speel</button></div></div>`;});c.innerHTML=h;}
+function loadCompletedMatches(){const c=document.getElementById('tabContentCompleted'),cm=state.matches.filter(m=>m.completed);if(!cm.length){c.innerHTML='<div class="no-matches">Geen voltooide matchen</div>';return;}let h='<div class="matches-list-title">Voltooide Matchen ('+cm.length+')</div><p style="margin:0 0 15px 0;color:#bdc3c7;font-size:0.9em;">De uitslagen staan in de planner. Corrigeren doe je daar bij Uitslagen.</p>';cm.forEach(m=>{h+=`<div class="match-card completed"><h3>${m.p1} ⚔️ ${m.p2}<span class="status-badge status-completed">Voltooid</span></h3><p class="match-info">Score: ${m.p1Score||0}-${m.p2Score||0} | Winnaar: ${m.winner||'?'}</p></div>`;});c.innerHTML=h;}
+window.deleteMatch=function(id){const i=state.matches.findIndex(m=>m.id===id);if(i!==-1&&!state.matches[i].plannerId&&confirm(`Match verwijderen?`)){state.matches.splice(i,1);saveStateToStorage();loadMatchesTabContent();}}
+// Kopieën van gedownloade matchen die ook in de planner staan, zouden in de statistieken dubbel tellen. Ze gaan weg.
+function ruimGedownloadeKopieenOp(){const lijst=state.downloadedMatches||[];const over=lijst.filter(m=>!m.plannerId);if(over.length!==lijst.length){state.downloadedMatches=over;saveStateToStorage();}}
 function saveStateToStorage(){
     try {
         localStorage.setItem('billiardState',JSON.stringify({players:state.players,matches:state.matches,downloadedMatches:state.downloadedMatches,speeldagen:state.speeldagen,seizoenen:state.seizoenen,actiefSeizoenId:state.actiefSeizoenId}));
@@ -3316,65 +3154,12 @@ function saveStateToStorage(){
         return false;
     }
 }
-window.exportAllData = function() {
-    const data = {
-        app: 'biljart-score-app',
-        version: APP_VERSION,
-        exportedAt: new Date().toISOString(),
-        players: state.players,
-        matches: state.matches,
-        downloadedMatches: state.downloadedMatches,
-        speeldagen: state.speeldagen,
-        seizoenen: state.seizoenen,
-        actiefSeizoenId: state.actiefSeizoenId
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `biljart_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-};
-window.importAllData = function() {
-    const f = document.createElement('input');
-    f.type = 'file';
-    f.accept = '.json,application/json';
-    f.onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const r = new FileReader();
-        r.onload = function(ev) {
-            try {
-                const d = JSON.parse(ev.target.result);
-                if (d.app !== 'biljart-score-app' || !Array.isArray(d.players) || !Array.isArray(d.matches)) {
-                    throw new Error('Dit is geen geldig back-upbestand.');
-                }
-                if (!confirm(`Back-up van ${d.exportedAt ? d.exportedAt.slice(0, 10) : '?'} terugzetten?\n\n${d.players.length} spelers, ${d.matches.length} matchen.\nDe huidige gegevens worden vervangen!`)) return;
-                state.players = d.players;
-                state.matches = d.matches;
-                state.downloadedMatches = d.downloadedMatches || [];
-                state.speeldagen = d.speeldagen || [];
-                state.seizoenen = d.seizoenen || [];
-                state.actiefSeizoenId = d.actiefSeizoenId || null;
-                saveStateToStorage();
-                alert('✅ Back-up teruggezet. De pagina wordt herladen.');
-                location.reload();
-            } catch (err) {
-                alert('❌ Terugzetten mislukt: ' + err.message);
-            }
-        };
-        r.readAsText(file, 'UTF-8');
-    };
-    f.click();
-};
 function loadStateFromStorage(){const s=localStorage.getItem('billiardState');if(s)try{const p=JSON.parse(s);state.players=p.players||[];state.matches=p.matches||[];state.downloadedMatches=p.downloadedMatches||[];state.speeldagen=p.speeldagen||[];state.seizoenen=p.seizoenen||[];state.actiefSeizoenId=p.actiefSeizoenId||null;}catch(e){}}
 function loadExtraDataFromStorage(){try{const si=localStorage.getItem('biljartSpelerExtraInfo');if(si)state.spelerExtraInfo=JSON.parse(si);}catch(e){}}
 loadExtraDataFromStorage();
 clearOldCache();
 loadStateFromStorage();
+ruimGedownloadeKopieenOp();
 const today=new Date(), di=document.getElementById('dateSelect');
 if(di){di.value=formatDateForInput(today);di.addEventListener('change',function(){state.selectedDate=this.value;});}
 updateTabBadges();
